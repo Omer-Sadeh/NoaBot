@@ -7,6 +7,7 @@ import json
 client = OpenAI(api_key=st.secrets["openai_key"])
 db = firestore.Client(credentials=service_account.Credentials.from_service_account_info(json.loads(st.secrets["firestore_creds"])))
 prompts = db.collection("prompts")
+selected_prompt_name = "omer-base"
 
 def reset_session():
     st.session_state.messages = [
@@ -35,6 +36,16 @@ def render_screen():
     st.title("שיחה עם נועה")
     st.write("את/ה המטפלת. נהלי שיחה עם נועה כדי לעזור לה בהתמודדויות שלה.")
 
+    st.sidebar.title("בחירת מערכת תסריטים")
+    prompt_names = [doc.to_dict()["name"] for doc in prompts.stream()]
+    selected_prompt_name = st.sidebar.selectbox(
+        "בחר תסריט", prompt_names, index=0
+    )
+
+    if "selected_prompt" not in st.session_state or st.session_state.selected_prompt != selected_prompt_name:
+        st.session_state.selected_prompt = selected_prompt_name
+        reset_session()
+
     if "messages" not in st.session_state:
         reset_session()
 
@@ -49,7 +60,7 @@ def render_screen():
 
         stream = client.chat.completions.create(
             model="gpt-4o-mini",
-            messages=[{"role": "system", "content": get_system_prompt("omer-base")}] +
+            messages=[{"role": "system", "content": get_system_prompt(selected_prompt_name)}] +
             [
                 {"role": m["role"], "content": m["content"]}
                 for m in st.session_state.messages
