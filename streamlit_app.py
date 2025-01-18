@@ -1,16 +1,21 @@
 import streamlit as st
 from google.oauth2 import service_account
 from openai import OpenAI
-from google.cloud import firestore
 import json
+import firebase_admin
+from firebase_admin import firestore
+
+if not firebase_admin._apps:
+    cred = service_account.Credentials.from_service_account_info(json.loads(st.secrets["firestore_creds"]))
+    firebase_admin.initialize_app(cred, {'projectId': 'noabotprompts',})
 
 client = OpenAI(api_key=st.secrets["openai_key"])
-db = firestore.Client(credentials=service_account.Credentials.from_service_account_info(json.loads(st.secrets["firestore_creds"])))
+db = firestore.client()
 prompts = db.collection("prompts")
-selected_prompt_name = "omer-base"
 
-def reset_session():
+def reset_session(system_prompt):
     st.session_state.messages = [
+        {"role": "system", "content": system_prompt},
         {"role": "assistant", "content": "האמת אתמול בערב ממש התבאסתי על דנה, קבענו להיפגש לקפה אתמול אחרי מלא זמן שלא נפגשנו. ממש קשה לי גם ככה לקבוע תוכניות ולצאת מהבית בתקופה הזו. חצי שעה לפני הזמן שקבענו, אחרי שכבר התארגנתי ובאתי לצאת היא כתבה לי שהיא ממש מצטערת אבל היא לא יכולה, בעלה היה בעבודה או משהו והיא הייתה צריכה לשמור על הילדים. לא משנה, זאת כבר הפעם השלישית שהיא עושה לי את זה. אני כבר לא יודעת מה לחשוב.. "}
     ]
 
@@ -33,9 +38,6 @@ def render_screen():
         unsafe_allow_html=True,
     )
 
-    st.title("שיחה עם נועה")
-    st.write("את/ה המטפלת. נהלי שיחה עם נועה כדי לעזור לה בהתמודדויות שלה.")
-
     st.sidebar.title("בחירת מערכת תסריטים")
     prompt_names = [doc.to_dict()["name"] for doc in prompts.stream()]
     selected_prompt_name = st.sidebar.selectbox(
@@ -44,10 +46,26 @@ def render_screen():
 
     if "selected_prompt" not in st.session_state or st.session_state.selected_prompt != selected_prompt_name:
         st.session_state.selected_prompt = selected_prompt_name
-        reset_session()
+        st.session_state.system_prompt = get_system_prompt(selected_prompt_name)
+        reset_session(st.session_state.system_prompt)
 
-    if "messages" not in st.session_state:
-        reset_session()
+    st.sidebar.text_area("Edit System Prompt", st.session_state.system_prompt, key="edited_prompt", height=200)
+
+    if st.sidebar.button("Update"):
+        st.session_state.system_prompt = st.session_state.edited_prompt
+        reset_session(st.session_state.system_prompt)
+
+    if st.sidebar.button("Save"):
+        new_prompt_name = st.sidebar.text_input("Enter new prompt name", "")
+        if new_prompt_name:
+            try:
+                prompts.add({"name": new_prompt_name, "prompt": st.session_state.system_prompt})
+                st.sidebar.success(f"Prompt '{new_prompt_name}' saved successfully!")
+            except json.JSONDecodeError as e:
+                st.error(f"Failed to save prompt: {e}")
+
+    st.title("שיחה עם נועה")
+    st.write("את/ה המטפלת. נהלי שיחה עם נועה כדי לעזור לה בהתמודדויות שלה.")
 
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):
@@ -60,11 +78,7 @@ def render_screen():
 
         stream = client.chat.completions.create(
             model="gpt-4o-mini",
-            messages=[{"role": "system", "content": get_system_prompt(selected_prompt_name)}] +
-            [
-                {"role": m["role"], "content": m["content"]}
-                for m in st.session_state.messages
-            ],
+            messages=st.session_state.messages,
             stream=True,
         )
 
