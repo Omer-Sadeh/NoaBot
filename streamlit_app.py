@@ -1,3 +1,4 @@
+import time
 import streamlit as st
 from google.oauth2 import service_account
 from openai import OpenAI
@@ -5,10 +6,12 @@ import json
 import firebase_admin
 from firebase_admin import firestore
 
+# Initialize Firebase
 if not firebase_admin._apps:
     cred = service_account.Credentials.from_service_account_info(json.loads(st.secrets["firestore_creds"]))
     firebase_admin.initialize_app(cred, {'projectId': 'noabotprompts',})
 
+# Initialize OpenAI client
 client = OpenAI(api_key=st.secrets["openai_key"])
 db = firestore.client()
 prompts = db.collection("prompts")
@@ -25,23 +28,15 @@ def get_system_prompt(name: str):
             return doc.to_dict()["prompt"]
     raise ValueError(f"Prompt '{name}' not found in database.")
 
-def render_screen():
-    st.markdown(
-        """
-        <style>
-            .stChatMessage, .stHeading, .stMarkdown, .stChatInput {
-                text-align: right;
-                direction: rtl;
-            }
-        </style>
-        """,
-        unsafe_allow_html=True,
-    )
-
+def sidebar():
     st.sidebar.title("בחירת מערכת תסריטים")
-    prompt_names = [doc.to_dict()["name"] for doc in prompts.stream()]
+
+    # Load prompt names if not already loaded or reloading is needed
+    if "prompt_names" not in st.session_state:
+        st.session_state.prompt_names = [doc.to_dict()["name"] for doc in prompts.stream()]
+
     selected_prompt_name = st.sidebar.selectbox(
-        "בחר תסריט", prompt_names, index=0
+        "בחר תסריט", st.session_state.prompt_names, index=0
     )
 
     if "selected_prompt" not in st.session_state or st.session_state.selected_prompt != selected_prompt_name:
@@ -55,14 +50,33 @@ def render_screen():
         st.session_state.system_prompt = st.session_state.edited_prompt
         reset_session(st.session_state.system_prompt)
 
+    new_prompt_name = st.sidebar.text_input("Enter new prompt name", "")
+
     if st.sidebar.button("Save"):
-        new_prompt_name = st.sidebar.text_input("Enter new prompt name", "")
         if new_prompt_name:
             try:
                 prompts.add({"name": new_prompt_name, "prompt": st.session_state.system_prompt})
-                st.sidebar.success(f"Prompt '{new_prompt_name}' saved successfully!")
+                st.session_state.prompt_names.append(new_prompt_name)
+                st.sidebar.success(f"Prompt '{new_prompt_name}' saved successfully.")
+                time.sleep(2)
+                st.rerun()
             except json.JSONDecodeError as e:
                 st.error(f"Failed to save prompt: {e}")
+
+def render_screen():
+    st.markdown(
+        """
+        <style>
+            .stChatMessage, .stHeading, .stMarkdown, .stChatInput {
+                text-align: right;
+                direction: rtl;
+            }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    sidebar()
 
     st.title("שיחה עם נועה")
     st.write("את/ה המטפלת. נהלי שיחה עם נועה כדי לעזור לה בהתמודדויות שלה.")
