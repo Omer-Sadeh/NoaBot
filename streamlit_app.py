@@ -16,7 +16,7 @@ client = OpenAI(api_key=st.secrets["openai_key"])
 db = firestore.client()
 prompts = db.collection("prompts")
 
-def reset_session(system_prompt):
+def reset_session():
     st.session_state.messages = [
         {"role": "assistant", "content": "האמת אתמול בערב ממש התבאסתי על דנה, קבענו להיפגש לקפה אתמול אחרי מלא זמן שלא נפגשנו. ממש קשה לי גם ככה לקבוע תוכניות ולצאת מהבית בתקופה הזו. חצי שעה לפני הזמן שקבענו, אחרי שכבר התארגנתי ובאתי לצאת היא כתבה לי שהיא ממש מצטערת אבל היא לא יכולה, בעלה היה בעבודה או משהו והיא הייתה צריכה לשמור על הילדים. לא משנה, זאת כבר הפעם השלישית שהיא עושה לי את זה. אני כבר לא יודעת מה לחשוב.. "}
     ]
@@ -40,13 +40,13 @@ def sidebar():
     if "selected_prompt" not in st.session_state or st.session_state.selected_prompt != selected_prompt_name:
         st.session_state.selected_prompt = selected_prompt_name
         st.session_state.system_prompt = get_system_prompt(selected_prompt_name)
-        reset_session(st.session_state.system_prompt)
+        reset_session()
 
     st.sidebar.text_area("Edit System Prompt", st.session_state.system_prompt, key="edited_prompt", height=200)
 
     if st.sidebar.button("Update"):
         st.session_state.system_prompt = st.session_state.edited_prompt
-        reset_session(st.session_state.system_prompt)
+        reset_session()
 
     new_prompt_name = st.sidebar.text_input("Enter new prompt name", "")
 
@@ -75,7 +75,7 @@ def sidebar():
                 st.session_state.prompt_names.remove(st.session_state.selected_prompt)
                 st.session_state.selected_prompt = ""
                 st.session_state.system_prompt = ""
-                reset_session(st.session_state.system_prompt)
+                reset_session()
                 time.sleep(2)
                 st.rerun()
         else:
