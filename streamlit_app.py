@@ -58,35 +58,47 @@ def sidebar():
     )
 
     if st.sidebar.button("שמור תסריט חדש", type="secondary"):
-        if new_prompt_name:
-            try:
-                prompts.add({"name": new_prompt_name, "prompt": st.session_state.system_prompt})
+        try:
+            if not new_prompt_name or new_prompt_name in st.session_state.prompt_names:
+                if not new_prompt_name:
+                    new_prompt_name = selected_prompt_name
+                prompt_docs = [doc for doc in prompts.stream() if doc.to_dict()["name"] == new_prompt_name]
+                if prompt_docs:
+                    prompt_doc = prompt_docs[0]
+                    db.collection("prompts").document(prompt_doc.id).update({"prompt": st.session_state.edited_prompt})
+                    st.sidebar.success(f"Prompt '{new_prompt_name}' updated successfully.")
+            else:
+                prompts.add({"name": new_prompt_name, "prompt": st.session_state.edited_prompt})
                 st.session_state.prompt_names.append(new_prompt_name)
                 st.sidebar.success(f"Prompt '{new_prompt_name}' saved successfully.")
-                time.sleep(2)
-                st.rerun()
-            except json.JSONDecodeError as e:
-                st.error(f"Failed to save prompt: {e}")
+        except Exception as e:
+            st.sidebar.error(f"Error saving prompt: {e}")
+
+        time.sleep(2)
+        st.rerun()
 
     # Add a delete button with confirmation
     delete_confirmation = st.sidebar.checkbox("אישור מחיקה")
     if st.sidebar.button("מחק תסריט נבחר", type="primary"):
-        if delete_confirmation:
-            # Fetch the current prompt document
-            prompt_docs = [doc for doc in prompts.stream() if doc.to_dict()["name"] == st.session_state.selected_prompt]
-            if prompt_docs:
-                prompt_doc = prompt_docs[0]
-                db.collection("prompts").document(prompt_doc.id).delete()
-                st.sidebar.success(f"Prompt '{st.session_state.selected_prompt}' deleted successfully.")
-                # Remove from prompt names and reset session
-                st.session_state.prompt_names.remove(st.session_state.selected_prompt)
-                st.session_state.selected_prompt = ""
-                st.session_state.system_prompt = ""
-                reset_session()
-                time.sleep(2)
-                st.rerun()
+        if selected_prompt_name == "omer-base":
+            st.sidebar.error("Cannot delete the base prompt.")
         else:
-            st.sidebar.warning("Please confirm to delete the prompt.")
+            if delete_confirmation:
+                # Fetch the current prompt document
+                prompt_docs = [doc for doc in prompts.stream() if doc.to_dict()["name"] == st.session_state.selected_prompt]
+                if prompt_docs:
+                    prompt_doc = prompt_docs[0]
+                    db.collection("prompts").document(prompt_doc.id).delete()
+                    st.sidebar.success(f"Prompt '{st.session_state.selected_prompt}' deleted successfully.")
+                    # Remove from prompt names and reset session
+                    st.session_state.prompt_names.remove(st.session_state.selected_prompt)
+                    st.session_state.selected_prompt = ""
+                    st.session_state.system_prompt = ""
+                    reset_session()
+                    time.sleep(2)
+                    st.rerun()
+            else:
+                st.sidebar.warning("Please confirm to delete the prompt.")
 
 def render_screen():
     st.markdown(
