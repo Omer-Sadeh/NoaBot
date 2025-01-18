@@ -9,7 +9,10 @@ from firebase_admin import firestore
 # Initialize Firebase
 if not firebase_admin._apps:
     cred = service_account.Credentials.from_service_account_info(json.loads(st.secrets["firestore_creds"]))
-    firebase_admin.initialize_app(cred, {'projectId': 'noabotprompts',})
+    try:
+        firebase_admin.initialize_app(cred, {'projectId': 'noabotprompts',}, name='noabotprompts')
+    except ValueError:
+        firebase_admin.initialize_app(cred, {'projectId': 'noabotprompts',})
 
 # Initialize OpenAI client
 client = OpenAI(api_key=st.secrets["openai_key"])
