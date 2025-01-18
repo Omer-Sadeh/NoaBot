@@ -18,7 +18,6 @@ prompts = db.collection("prompts")
 
 def reset_session(system_prompt):
     st.session_state.messages = [
-        {"role": "system", "content": system_prompt},
         {"role": "assistant", "content": "האמת אתמול בערב ממש התבאסתי על דנה, קבענו להיפגש לקפה אתמול אחרי מלא זמן שלא נפגשנו. ממש קשה לי גם ככה לקבוע תוכניות ולצאת מהבית בתקופה הזו. חצי שעה לפני הזמן שקבענו, אחרי שכבר התארגנתי ובאתי לצאת היא כתבה לי שהיא ממש מצטערת אבל היא לא יכולה, בעלה היה בעבודה או משהו והיא הייתה צריכה לשמור על הילדים. לא משנה, זאת כבר הפעם השלישית שהיא עושה לי את זה. אני כבר לא יודעת מה לחשוב.. "}
     ]
 
@@ -111,7 +110,7 @@ def render_screen():
 
         stream = client.chat.completions.create(
             model="gpt-4o-mini",
-            messages=st.session_state.messages,
+            messages=[{"role": "system", "content": st.session_state.system_prompt}] + st.session_state.messages,
             stream=True,
         )
 
