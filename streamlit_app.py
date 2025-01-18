@@ -42,15 +42,22 @@ def sidebar():
         st.session_state.system_prompt = get_system_prompt(selected_prompt_name)
         reset_session()
 
-    st.sidebar.text_area("Edit System Prompt", st.session_state.system_prompt, key="edited_prompt", height=200)
+    st.sidebar.text_area(
+        "ערוך תסריט נוכחי",
+        st.session_state.system_prompt, key="edited_prompt",
+        height=200
+    )
 
-    if st.sidebar.button("Update"):
+    if st.sidebar.button("עדכן תסריט פעיל (לא ישמר)"):
         st.session_state.system_prompt = st.session_state.edited_prompt
         reset_session()
 
-    new_prompt_name = st.sidebar.text_input("Enter new prompt name", "")
+    new_prompt_name = st.sidebar.text_input(
+        "בחר שם לתסריט חדש",
+        ""
+    )
 
-    if st.sidebar.button("Save"):
+    if st.sidebar.button("שמור תסריט חדש", type="secondary"):
         if new_prompt_name:
             try:
                 prompts.add({"name": new_prompt_name, "prompt": st.session_state.system_prompt})
@@ -62,8 +69,8 @@ def sidebar():
                 st.error(f"Failed to save prompt: {e}")
 
     # Add a delete button with confirmation
-    delete_confirmation = st.sidebar.checkbox("Confirm delete")
-    if st.sidebar.button("Delete"):
+    delete_confirmation = st.sidebar.checkbox("אישור מחיקה")
+    if st.sidebar.button("מחק תסריט נבחר", type="primary"):
         if delete_confirmation:
             # Fetch the current prompt document
             prompt_docs = [doc for doc in prompts.stream() if doc.to_dict()["name"] == st.session_state.selected_prompt]
@@ -85,7 +92,7 @@ def render_screen():
     st.markdown(
         """
         <style>
-            .stChatMessage, .stHeading, .stMarkdown, .stChatInput {
+            .stChatMessage, .stHeading, .stMarkdown, .stChatInput, .stTextInput, .stSelectbox, .stElementContainer {
                 text-align: right;
                 direction: rtl;
             }
