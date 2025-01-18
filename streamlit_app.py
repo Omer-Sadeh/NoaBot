@@ -31,7 +31,6 @@ def get_system_prompt(name: str):
 def sidebar():
     st.sidebar.title("בחירת מערכת תסריטים")
 
-    # Load prompt names if not already loaded or reloading is needed
     if "prompt_names" not in st.session_state:
         st.session_state.prompt_names = [doc.to_dict()["name"] for doc in prompts.stream()]
 
@@ -62,6 +61,26 @@ def sidebar():
                 st.rerun()
             except json.JSONDecodeError as e:
                 st.error(f"Failed to save prompt: {e}")
+
+    # Add a delete button with confirmation
+    delete_confirmation = st.sidebar.checkbox("Confirm delete")
+    if st.sidebar.button("Delete"):
+        if delete_confirmation:
+            # Fetch the current prompt document
+            prompt_docs = [doc for doc in prompts.stream() if doc.to_dict()["name"] == st.session_state.selected_prompt]
+            if prompt_docs:
+                prompt_doc = prompt_docs[0]
+                db.collection("prompts").document(prompt_doc.id).delete()
+                st.sidebar.success(f"Prompt '{st.session_state.selected_prompt}' deleted successfully.")
+                # Remove from prompt names and reset session
+                st.session_state.prompt_names.remove(st.session_state.selected_prompt)
+                st.session_state.selected_prompt = ""
+                st.session_state.system_prompt = ""
+                reset_session(st.session_state.system_prompt)
+                time.sleep(2)
+                st.rerun()
+        else:
+            st.sidebar.warning("Please confirm to delete the prompt.")
 
 def render_screen():
     st.markdown(
