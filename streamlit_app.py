@@ -10,9 +10,10 @@ from firebase_admin import firestore
 if not firebase_admin._apps:
     cred = service_account.Credentials.from_service_account_info(json.loads(st.secrets["firestore_creds"]))
     try:
-        firebase_admin.initialize_app(cred, {'projectId': 'noabotprompts',}, name='noabotprompts')
-    except ValueError:
         firebase_admin.initialize_app(cred, {'projectId': 'noabotprompts',})
+    except ValueError:
+        print("App already initialized")
+        firebase_admin.initialize_app(cred, {'projectId': 'noabotprompts',}, name='noabotprompts')
 
 # Initialize OpenAI client
 client = OpenAI(api_key=st.secrets["openai_key"])
@@ -56,11 +57,11 @@ def sidebar():
         reset_session()
 
     new_prompt_name = st.sidebar.text_input(
-        "בחר שם לתסריט חדש",
-        ""
+        "בחר שם לתסריט לשמירה",
+        selected_prompt_name
     )
 
-    if st.sidebar.button("שמור תסריט חדש", type="secondary"):
+    if st.sidebar.button("שמור תסריט חדש", type="secondary", disabled=(new_prompt_name == "omer-base")):
         try:
             if not new_prompt_name or new_prompt_name in st.session_state.prompt_names:
                 if not new_prompt_name:
@@ -82,7 +83,7 @@ def sidebar():
 
     # Add a delete button with confirmation
     delete_confirmation = st.sidebar.checkbox("אישור מחיקה")
-    if st.sidebar.button("מחק תסריט נבחר", type="primary"):
+    if st.sidebar.button("מחק תסריט נבחר", type="primary", disabled=(selected_prompt_name == "omer-base")):
         if selected_prompt_name == "omer-base":
             st.sidebar.error("Cannot delete the base prompt.")
         else:
