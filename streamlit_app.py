@@ -121,10 +121,20 @@ def render_screen():
 
     st.title("שיחה עם נועה")
     st.write("את/ה המטפלת. נהלי שיחה עם נועה כדי לעזור לה בהתמודדויות שלה.")
+    conversation_text = ""
+
+    # Button to download the current conversation
+    st.download_button(
+        "Save Conversation",
+        conversation_text,
+        file_name="conversation.txt",
+        mime="text/plain"
+    )
 
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
+        conversation_text += f"{message['role']}: {message['content']}\n"
 
     if prompt := st.chat_input("מה תרצי לענות?"):
         st.session_state.messages.append({"role": "user", "content": prompt})
@@ -140,6 +150,7 @@ def render_screen():
         with st.chat_message("assistant"):
             response = st.write_stream(stream)
         st.session_state.messages.append({"role": "assistant", "content": response})
+        conversation_text += f"user: {prompt}\nassistant: {response}\n"
 
 if __name__ == "__main__":
     render_screen()
