@@ -20,10 +20,42 @@ client = OpenAI(api_key=st.secrets["openai_key"])
 db = firestore.client()
 prompts = db.collection("prompts")
 
+hebrew_prompt = "האמת אתמול בערב ממש התבאסתי על דנה, קבענו להיפגש לקפה אתמול אחרי מלא זמן שלא נפגשנו. ממש קשה לי גם ככה לקבוע תוכניות ולצאת מהבית בתקופה הזו. חצי שעה לפני הזמן שקבענו, אחרי שכבר התארגנתי ובאתי לצאת היא כתבה לי שהיא ממש מצטערת אבל היא לא יכולה, בעלה היה בעבודה או משהו והיא הייתה צריכה לשמור על הילדים. לא משנה, זאת כבר הפעם השלישית שהיא עושה לי את זה. אני כבר לא יודעת מה לחשוב.. "
+english_prompt = "Yesterday evening I was really upset with Dana, we had arranged to meet for coffee yesterday after a long time we hadn't met. It's really hard for me to make plans and leave the house during this period. Half an hour before the time we arranged, after I had already arranged and come to leave, she wrote to me that she was really sorry but she couldn't, her husband was at work or something and she had to take care of the kids. Never mind, this is already the third time she's done this to me. I don't know what to think anymore.. "
+
+def is_hebrew():
+    return "language" not in st.session_state or st.session_state.language == "hebrew"
+
 def reset_session():
     st.session_state.messages = [
-        {"role": "assistant", "content": "האמת אתמול בערב ממש התבאסתי על דנה, קבענו להיפגש לקפה אתמול אחרי מלא זמן שלא נפגשנו. ממש קשה לי גם ככה לקבוע תוכניות ולצאת מהבית בתקופה הזו. חצי שעה לפני הזמן שקבענו, אחרי שכבר התארגנתי ובאתי לצאת היא כתבה לי שהיא ממש מצטערת אבל היא לא יכולה, בעלה היה בעבודה או משהו והיא הייתה צריכה לשמור על הילדים. לא משנה, זאת כבר הפעם השלישית שהיא עושה לי את זה. אני כבר לא יודעת מה לחשוב.. "}
+        {"role": "assistant", "content": hebrew_prompt if is_hebrew() else english_prompt}
     ]
+
+def update_directions():
+    if is_hebrew():
+        st.markdown(
+            """
+            <style>
+                .stChatMessage, .stHeading, .stMarkdown, .stChatInput, .stTextInput, .stSelectbox, .stElementContainer {
+                    text-align: right;
+                    direction: rtl;
+                }
+            </style>
+            """,
+            unsafe_allow_html=True,
+        )
+    else:
+        st.markdown(
+            """
+            <style>
+                .stChatMessage, .stHeading, .stMarkdown, .stChatInput, .stTextInput, .stSelectbox, .stElementContainer {
+                    text-align: left;
+                    direction: ltr;
+                }
+            </style>
+            """,
+            unsafe_allow_html=True,
+        )
 
 def get_system_prompt(name: str):
     for doc in prompts.stream():
@@ -105,17 +137,7 @@ def sidebar():
                 st.sidebar.warning("Please confirm to delete the prompt.")
 
 def render_screen():
-    st.markdown(
-        """
-        <style>
-            .stChatMessage, .stHeading, .stMarkdown, .stChatInput, .stTextInput, .stSelectbox, .stElementContainer {
-                text-align: right;
-                direction: rtl;
-            }
-        </style>
-        """,
-        unsafe_allow_html=True,
-    )
+    update_directions()
 
     sidebar()
 
@@ -130,6 +152,15 @@ def render_screen():
         file_name="conversation.txt",
         mime="text/plain"
     )
+
+    # button to change the prompt
+    if st.button("החלף שפה"):
+        if is_hebrew():
+            st.session_state.language = "english"
+        elif st.session_state.language == "english":
+            st.session_state.language = "hebrew"
+        reset_session()
+        update_directions()
 
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):
