@@ -20,11 +20,13 @@ client = OpenAI(api_key=st.secrets["openai_key"])
 db = firestore.client()
 prompts = db.collection("prompts")
 
+BASE_PROMPT = "text_VR_prompt_with_feedback"
+
 hebrew_prompt = "האמת אתמול בערב ממש התבאסתי על דנה, קבענו להיפגש לקפה אתמול אחרי מלא זמן שלא נפגשנו. ממש קשה לי גם ככה לקבוע תוכניות ולצאת מהבית בתקופה הזו. חצי שעה לפני הזמן שקבענו, אחרי שכבר התארגנתי ובאתי לצאת היא כתבה לי שהיא ממש מצטערת אבל היא לא יכולה, בעלה היה בעבודה או משהו והיא הייתה צריכה לשמור על הילדים. לא משנה, זאת כבר הפעם השלישית שהיא עושה לי את זה. אני כבר לא יודעת מה לחשוב.. "
 english_prompt = "Yesterday evening I was really upset with Dana, we had arranged to meet for coffee yesterday after a long time we hadn't met. It's really hard for me to make plans and leave the house during this period. Half an hour before the time we arranged, after I had already arranged and come to leave, she wrote to me that she was really sorry but she couldn't, her husband was at work or something and she had to take care of the kids. Never mind, this is already the third time she's done this to me. I don't know what to think anymore.. "
 
 def is_hebrew():
-    return "language" not in st.session_state or st.session_state.language == "hebrew"
+    return "language" in st.session_state and st.session_state.language == "hebrew"
 
 def reset_session():
     st.session_state.messages = [
@@ -69,9 +71,14 @@ def sidebar():
     if "prompt_names" not in st.session_state:
         st.session_state.prompt_names = [doc.to_dict()["name"] for doc in prompts.stream()]
 
-    selected_prompt_name = st.sidebar.selectbox(
-        "בחר תסריט", st.session_state.prompt_names, index=0
-    )
+    try:
+        selected_prompt_name = st.sidebar.selectbox(
+            "בחר תסריט", st.session_state.prompt_names, index=1
+        )
+    except IndexError:
+        selected_prompt_name = st.sidebar.selectbox(
+            "בחר תסריט", st.session_state.prompt_names, index=0
+        )
 
     if "selected_prompt" not in st.session_state or st.session_state.selected_prompt != selected_prompt_name:
         st.session_state.selected_prompt = selected_prompt_name
@@ -93,7 +100,7 @@ def sidebar():
         selected_prompt_name
     )
 
-    if st.sidebar.button("שמור תסריט חדש", type="secondary", disabled=(new_prompt_name == "omer-base")):
+    if st.sidebar.button("שמור תסריט חדש", type="secondary", disabled=(new_prompt_name == BASE_PROMPT)):
         try:
             if not new_prompt_name or new_prompt_name in st.session_state.prompt_names:
                 if not new_prompt_name:
@@ -115,8 +122,8 @@ def sidebar():
 
     # Add a delete button with confirmation
     delete_confirmation = st.sidebar.checkbox("אישור מחיקה")
-    if st.sidebar.button("מחק תסריט נבחר", type="primary", disabled=(selected_prompt_name == "omer-base")):
-        if selected_prompt_name == "omer-base":
+    if st.sidebar.button("מחק תסריט נבחר", type="primary", disabled=(selected_prompt_name == BASE_PROMPT)):
+        if selected_prompt_name == BASE_PROMPT:
             st.sidebar.error("Cannot delete the base prompt.")
         else:
             if delete_confirmation:
@@ -157,7 +164,7 @@ def render_screen():
     if st.button("החלף שפה"):
         if is_hebrew():
             st.session_state.language = "english"
-        elif st.session_state.language == "english":
+        elif "language" not in st.session_state or st.session_state.language == "english":
             st.session_state.language = "hebrew"
         reset_session()
         update_directions()
