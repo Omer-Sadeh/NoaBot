@@ -32,6 +32,70 @@ def reset_session():
     st.session_state.messages = [
         {"role": "assistant", "content": hebrew_prompt if is_hebrew() else english_prompt}
     ]
+    st.session_state.guidelines = [
+        "Identifying the conflict and initial frustration - Did the therapist recognize and validate Noa’s frustration regarding the conflict?",
+        "Identifying and framing the emotions involved in the conflict - Did the therapist help Noa articulate and frame her emotions instead of rushing to solutions?",
+        "Recognizing Noa’s coping or behavioral patterns in conflicts - Did the therapist explore Noa’s typical ways of handling conflicts?",
+        "Defining a goal for the conflict - Did the therapist help Noa define a goal for the conversation?",
+        "Practicing assertive communication - Did the therapist prompt Noa to practice formulating an assertive message for the conversation?",
+        "Creating a compromise or summary that supports a healthy resolution - Did the therapist assist Noa in drawing conclusions and considering a compromise?"
+    ]
+
+def evaluate_guidelines():
+    system = f"You are an expert in human emotions and psychology. \
+    I will show you a part of a therapy session with Noa, a patient who is struggling with a conflict. \
+    Your goal is to evaluate the therapist's performance according to the following guidelines:"
+
+    if len(st.session_state.guidelines ) == 0:
+        return []
+
+    for idx, guideline in enumerate(st.session_state.guidelines ):
+        system += f"\n\n{idx+1}. {guideline}"
+
+    therapy_session = ""
+    for message in st.session_state.messages:
+        therapy_session += f"{'Noa' if message['role'] == 'assistant' else 'Therapist'}: {message['content']}\n\n"
+
+    answer = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[{"role": "system", "content": system}, {"role": "user", "content": therapy_session}],
+        response_format={
+            "type": "json_schema",
+            "json_schema": {
+                "name": "guidelines_evaluation",
+                "schema": {
+                    "type": "object",
+                    "properties": {
+                        "completed_indexes": {
+                            "type": "array",
+                            "items": {
+                                "type": "integer"
+                            },
+                            "description": "Indexes of the guidelines that were completed by the therapist and Noa."
+                        }
+                    },
+                    "required": ["completed_indexes"],
+                    "additionalProperties": False
+                },
+                "strict": True
+            }
+        }
+    ).choices[0].message.content
+
+    completed_idxs = json.loads(answer)["completed_indexes"]
+    updated_guidelines = []
+    completed_guidelines = []
+
+    for idx, guideline in enumerate(st.session_state.guidelines):
+        if idx + 1 not in completed_idxs:
+            updated_guidelines.append(guideline)
+        else:
+            completed_guidelines.append(guideline.split(" - ")[0])
+
+    st.session_state.guidelines = updated_guidelines
+
+    return completed_guidelines
+
 
 def update_directions():
     if is_hebrew():
@@ -189,6 +253,14 @@ def render_screen():
             response = st.write_stream(stream)
         st.session_state.messages.append({"role": "assistant", "content": response})
         conversation_text += f"user: {prompt}\nassistant: {response}\n"
+
+        completed = evaluate_guidelines()
+
+        for guideline in completed:
+            st.success(f"Guideline '{guideline}' completed successfully.")
+
+        if len(st.session_state.guidelines) == 0:
+            st.success("All guidelines completed successfully!")
 
 if __name__ == "__main__":
     render_screen()
