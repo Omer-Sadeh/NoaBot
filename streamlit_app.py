@@ -1,9 +1,14 @@
 import streamlit as st
 from openai import OpenAI
 import json
+import concurrent.futures
 
-# Initialize OpenAI client
 client = OpenAI(api_key=st.secrets["openai_key"])
+async_context = concurrent.futures.ThreadPoolExecutor()
+
+def start_promise(function: callable, *args, **kwargs) -> concurrent.futures.Future:
+    global async_context
+    return async_context.submit(function, *args, **kwargs)
 
 def reset_session():
     st.session_state.messages = [
@@ -27,12 +32,12 @@ def reset_session():
     st.session_state.rounds_since_last_completion = 0
     st.session_state.system_prompt = "You are a patient named Noa, who struggles with difficulties in dealing with conflicts with other people. You hate conflicts, in which you only do one of two options: start arguing and shouting at the other person, or leave the place, ignore, repress. Sometimes there are situations where you simply prefer to do what the other side wants even if it doesn't suit you. You are very sensitive to criticism. Your husband's name is Dor. Your good friend's name is Dana, and she has children which sometimes means she doesn't have time for you. The situation is a conversation with your psychologist. I am the psychologist and you are Noa. You should only answer Noa's responses and nothing else. You should be as responsive as possible to what the therapist said, while maintaining Noa's character and coping style. You are not the therapist, and you don't ask questions to the therapist, only respond with things related to yourself."
 
-def evaluate_guidelines():
+def evaluate_guidelines(state: dict):
     system = f"You are an expert in human emotions and psychology. \
     I will show you a part of a therapy session with Noa, a patient who is struggling with a conflict. \
     Your goal is to evaluate the therapist's performance according to the following guidelines:"
 
-    current_guidelines = st.session_state.guidelines[st.session_state.current_stage]
+    current_guidelines = state['guidelines'][state['current_stage']]
 
     for idx, guideline in enumerate(current_guidelines):
         system += f"\n\n{idx+1}. {guideline}"
@@ -44,7 +49,7 @@ def evaluate_guidelines():
     please do not mark it as completed."
 
     therapy_session = ""
-    for message in st.session_state.messages:
+    for message in state['messages']:
         therapy_session += f"{'Noa' if message['role'] == 'assistant' else 'Therapist'}: {message['content']}\n\n"
 
     answer = client.chat.completions.create(
@@ -83,24 +88,24 @@ def evaluate_guidelines():
         else:
             completed_guidelines.append(guideline.split(" - ")[0])
 
-    st.session_state.guidelines[st.session_state.current_stage] = updated_guidelines
+    state['guidelines'][state['current_stage']] = updated_guidelines
 
     completed = False
 
     if len(updated_guidelines) == 0:
-        st.session_state.current_stage += 1
-        if st.session_state.current_stage >= len(st.session_state.guidelines):
+        state['current_stage'] += 1
+        if state['current_stage'] >= len(state['guidelines']):
             completed = True
 
-    return completed_guidelines, completed
+    return completed_guidelines, completed, state
 
-def get_director_tip():
+def get_director_tip(state: dict):
     system = f"You are an expert in human emotions and psychology. \
     I will show you a part of a therapy session with Noa, a patient who is struggling with a conflict. \
     Your goal is to give the therapist the best tip for improving the therapy session. \
     The therapist has the following guidelines to accomplish:"
 
-    current_guidelines = st.session_state.guidelines[st.session_state.current_stage]
+    current_guidelines = state['guidelines'][state['current_stage']]
 
     for idx, guideline in enumerate(current_guidelines):
         system += f"\n\n{idx+1}. {guideline}"
@@ -110,7 +115,7 @@ def get_director_tip():
     Be gentle but direct, and keep it a one short sentence."
 
     therapy_session = ""
-    for message in st.session_state.messages:
+    for message in state['messages']:
         therapy_session += f"{'Noa' if message['role'] == 'assistant' else 'Therapist'}: {message['content']}\n\n"
 
     answer = client.chat.completions.create(
@@ -176,7 +181,13 @@ def render_screen():
             response = st.write_stream(stream)
         st.session_state.messages.append({"role": "assistant", "content": response})
 
-        completed_guidelines, done = evaluate_guidelines()
+        guidelines_promise = start_promise(evaluate_guidelines, st.session_state.to_dict())
+        tip_promise = start_promise(get_director_tip, st.session_state.to_dict())
+        completed_guidelines, done, new_state = guidelines_promise.result()
+        tip = tip_promise.result()
+
+        for key, value in new_state.items():
+            st.session_state[key] = value
 
         if len(completed_guidelines) > 0:
             st.session_state.rounds_since_last_completion = 0
@@ -187,7 +198,6 @@ def render_screen():
             add_to_sidebar(f"Guideline '{guideline}' completed successfully.")
 
         if st.session_state.rounds_since_last_completion > 0:
-            tip = get_director_tip()
             add_to_sidebar(f"Tip: {tip}")
 
         if done:
