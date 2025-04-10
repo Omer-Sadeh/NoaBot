@@ -35,8 +35,15 @@ def reset_session():
     st.session_state.done = False
     st.session_state.running = True
 
-    st.session_state.start_time = time.time()
+    st.session_state.start_time = None
     st.session_state.end_time = None
+    st.session_state.step_times = []
+
+    st.session_state.step_user_messages_amount = []
+
+    st.session_state.completed_guidelines = 0
+
+    st.session_state.tips_shown = 0
 
 def evaluate_guidelines(state: dict):
     system = f"You are an expert in human emotions and psychology. \
@@ -98,10 +105,23 @@ def evaluate_guidelines(state: dict):
 
     if len(updated_guidelines) == 0:
         state['current_stage'] += 1
+
+        step_time = time.time() - state['start_time']
+        for t in state['step_times']:
+            step_time -= t
+        state['step_times'].append(step_time)
+
+        user_messages_amount = len([msg for msg in state['messages'] if msg['role'] == 'user'])
+        for s in state['step_user_messages_amount']:
+            user_messages_amount -= s
+        state['step_user_messages_amount'].append(user_messages_amount)
+
         if state['current_stage'] >= len(state['guidelines']):
             state['done'] = True
             state['running'] = False
             state['end_time'] = time.time()
+
+    state['completed_guidelines'] += len(completed_guidelines)
 
     return completed_guidelines, state
 
@@ -156,12 +176,23 @@ def add_to_sidebar(text):
     with info_container:
         if text.startswith("Tip:"):
             st.warning(text)
+            st.session_state.tips_shown += 1
         else:
             st.success(text)
 
 def end_session():
     st.session_state.running = False
     st.session_state.end_time = time.time()
+    if not st.session_state.done:
+        user_messages_amount = len([msg for msg in st.session_state.messages if msg['role'] == 'user'])
+        for s in st.session_state.step_user_messages_amount:
+            user_messages_amount -= s
+        st.session_state.step_user_messages_amount.append(user_messages_amount)
+
+        step_time = st.session_state.end_time - st.session_state.start_time
+        for t in st.session_state.step_times:
+            step_time -= t
+        st.session_state.step_times.append(step_time)
 
 def render_screen():
     st.sidebar.title("Tips & Progress")
@@ -177,6 +208,8 @@ def render_screen():
         st.session_state.messages.append({"role": "user", "content": prompt})
         with st.chat_message("user"):
             st.markdown(prompt)
+
+        st.session_state.start_time = time.time()
 
         stream = client.chat.completions.create(
             model="gpt-4o-mini",
@@ -221,7 +254,48 @@ def render_end_screen():
         st.error("Not all guidelines were completed.")
 
     elapsed_time = st.session_state.end_time - st.session_state.start_time
-    st.write(f"Session duration: {elapsed_time:.2f} seconds")
+    elapsed_time_text = f"{int(elapsed_time / 60)} minutes {int(elapsed_time % 60)} seconds"
+    st.write(f"Conversation Duration: {elapsed_time_text}")
+
+    user_msgs = len([msg for msg in st.session_state.messages if msg['role'] == 'user'])
+    st.write(f"Number of user messages: {user_msgs}")
+
+    st.write(f"Number of completed Steps: {st.session_state.current_stage}")
+
+    st.write(f"Number of Completed Criteria: {st.session_state.completed_guidelines}")
+
+    steps_times = [int(t / 60) for t in st.session_state.step_times]
+    st.write(f"Time on Each Step (min): {steps_times}")
+
+    st.write(f"Number of tips shown: {st.session_state.tips_shown}")
+
+    st.write("Thank you for participating in this session!")
+
+    conv_transcript = "\n\n".join([
+        f"-- {'Noa' if message['role'] == 'assistant' else 'User'}: {message['content']}"
+        for message in st.session_state.messages
+    ])
+
+    save_data = f"""\
+Completed: {st.session_state.done}\n\
+Session Duration: {elapsed_time_text}\n\
+Number of user messages: {user_msgs}\n\
+Number of completed Steps: {st.session_state.current_stage}\n\
+Number of Completed Criteria: {st.session_state.completed_guidelines}\n\
+Time on Each Step (min): {steps_times}\n\
+Number of tips shown: {st.session_state.tips_shown}\n\
+Conversation Transcript: \n\
+--------------------------\n\n\
+{conv_transcript}\n\n\
+--------------------------
+"""
+
+    st.download_button(
+        "Save Results + Transcript",
+        save_data,
+        file_name=f"transcript_results_{time.strftime('%Y%m%d_%H%M%S')}.txt",
+        mime="text/plain"
+    )
 
 if __name__ == "__main__":
     if "running" not in st.session_state:
