@@ -1,3 +1,6 @@
+import base64
+from pathlib import Path
+
 import streamlit as st
 from openai import OpenAI
 import json
@@ -44,6 +47,8 @@ def reset_session():
     st.session_state.completed_guidelines = 0
 
     st.session_state.tips_shown = 0
+
+    st.session_state.voice = False
 
 def evaluate_guidelines(state: dict):
     system = f"You are an expert in human emotions and psychology. \
@@ -194,11 +199,44 @@ def end_session():
             step_time -= t
         st.session_state.step_times.append(step_time)
 
+def text_to_speech(input_text):
+    # Create a temporary directory if it doesn't exist
+    temp_dir = Path("temp_audio")
+    temp_dir.mkdir(exist_ok=True)
+
+    # Generate a file path for the audio file
+    output_path = temp_dir / "speech.mp3"
+
+    try:
+        with client.audio.speech.with_streaming_response.create(
+                model="gpt-4o-mini-tts",
+                voice="coral",
+                input=input_text
+        ) as response:
+            response.stream_to_file(output_path)
+        return output_path
+    except Exception as e:
+        st.error(f"Error generating audio: {e}")
+        return None
+
+def autoplay_audio(file_path):
+    with open(file_path, "rb") as f:
+        audio_bytes = f.read()
+
+    audio_base64 = base64.b64encode(audio_bytes).decode()
+    md_html = f"""
+        <audio autoplay>
+        <source src="data:audio/mp3;base64,{audio_base64}" type="audio/mp3">
+        </audio>
+    """
+    st.markdown(md_html, unsafe_allow_html=True)
+
 def render_screen():
     st.sidebar.title("Tips & Progress")
 
     st.title("Talk with Noa")
     st.write("You are the therapist, help Noa with her conflict.")
+    st.checkbox("Sound voice", value=st.session_state.voice, on_change=lambda: st.session_state.update({"voice": not st.session_state.voice}))
 
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):
@@ -220,6 +258,11 @@ def render_screen():
         with st.chat_message("assistant"):
             response = st.write_stream(stream)
         st.session_state.messages.append({"role": "assistant", "content": response})
+        if st.session_state.voice:
+            with st.spinner("Generating audio..."):
+                audio_file = text_to_speech(response)
+                if audio_file:
+                    autoplay_audio(audio_file)
 
         st.button("End Conversation", on_click=end_session)
 
