@@ -142,6 +142,16 @@ def get_director_tip():
 
     return json.loads(answer)["tip"]
 
+def add_to_sidebar_sidebar(text=None):
+    sidebar = st.sidebar
+    info_container = sidebar.container()
+
+    with info_container:
+        if text.startswith("Tip:"):
+            st.warning(text)
+        else:
+            st.success(text)
+
 def render_screen():
     global INPUT_BLOCKED
 
@@ -159,6 +169,8 @@ def render_screen():
 
     if "messages" not in st.session_state:
         reset_session()
+
+    st.sidebar.title("Tips & Progress")
 
     st.title("Talk with Noa")
     st.write("You are the therapist, help Noa with her conflict.")
@@ -190,14 +202,14 @@ def render_screen():
             st.session_state.rounds_since_last_completion += 1
 
         for guideline in completed_guidelines:
-            st.success(f"Guideline '{guideline}' completed successfully.")
+            add_to_sidebar_sidebar(f"Guideline '{guideline}' completed successfully.")
 
         if st.session_state.rounds_since_last_completion > 0:
             tip = get_director_tip()
-            st.warning(f"Tip: {tip}")
+            add_to_sidebar_sidebar(f"Tip: {tip}")
 
         if done:
-            st.success("All guidelines completed successfully!")
+            add_to_sidebar_sidebar("All guidelines completed successfully!")
 
 if __name__ == "__main__":
     render_screen()
