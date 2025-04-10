@@ -31,6 +31,8 @@ def reset_session():
     ]
     st.session_state.rounds_since_last_completion = 0
     st.session_state.system_prompt = "You are a patient named Noa, who struggles with difficulties in dealing with conflicts with other people. You hate conflicts, in which you only do one of two options: start arguing and shouting at the other person, or leave the place, ignore, repress. Sometimes there are situations where you simply prefer to do what the other side wants even if it doesn't suit you. You are very sensitive to criticism. Your husband's name is Dor. Your good friend's name is Dana, and she has children which sometimes means she doesn't have time for you. The situation is a conversation with your psychologist. I am the psychologist and you are Noa. You should only answer Noa's responses and nothing else. You should be as responsive as possible to what the therapist said, while maintaining Noa's character and coping style. You are not the therapist, and you don't ask questions to the therapist, only respond with things related to yourself."
+    st.session_state.done = False
+    st.session_state.running = True
 
 def evaluate_guidelines(state: dict):
     system = f"You are an expert in human emotions and psychology. \
@@ -90,14 +92,13 @@ def evaluate_guidelines(state: dict):
 
     state['guidelines'][state['current_stage']] = updated_guidelines
 
-    completed = False
-
     if len(updated_guidelines) == 0:
         state['current_stage'] += 1
         if state['current_stage'] >= len(state['guidelines']):
-            completed = True
+            state['done'] = True
+            state['running'] = False
 
-    return completed_guidelines, completed, state
+    return completed_guidelines, state
 
 def get_director_tip(state: dict):
     system = f"You are an expert in human emotions and psychology. \
@@ -153,10 +154,10 @@ def add_to_sidebar(text):
         else:
             st.success(text)
 
-def render_screen():
-    if "messages" not in st.session_state:
-        reset_session()
+def end_session():
+    st.session_state.running = False
 
+def render_screen():
     st.sidebar.title("Tips & Progress")
 
     st.title("Talk with Noa")
@@ -181,12 +182,16 @@ def render_screen():
             response = st.write_stream(stream)
         st.session_state.messages.append({"role": "assistant", "content": response})
 
+        st.button("End Conversation", on_click=end_session)
+
         guidelines_promise = start_promise(evaluate_guidelines, st.session_state.to_dict())
         tip_promise = start_promise(get_director_tip, st.session_state.to_dict())
-        completed_guidelines, done, new_state = guidelines_promise.result()
+        completed_guidelines, new_state = guidelines_promise.result()
         tip = tip_promise.result()
 
         for key, value in new_state.items():
+            if key == 'reset_button':
+                continue
             st.session_state[key] = value
 
         if len(completed_guidelines) > 0:
@@ -200,8 +205,17 @@ def render_screen():
         if st.session_state.rounds_since_last_completion > 0:
             add_to_sidebar(f"Tip: {tip}")
 
-        if done:
+        if st.session_state.done:
             add_to_sidebar("All guidelines completed successfully!")
 
 if __name__ == "__main__":
-    render_screen()
+    if "running" not in st.session_state:
+        reset_session()
+
+    if not st.session_state.running:
+        if st.session_state.done:
+            st.success("All guidelines completed successfully!")
+        else:
+            st.warning("Finished the session, please refresh the page to start a new one.")
+    else:
+        render_screen()
