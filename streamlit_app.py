@@ -5,10 +5,6 @@ import json
 # Initialize OpenAI client
 client = OpenAI(api_key=st.secrets["openai_key"])
 
-BASE_PROMPT = "omer-base-eng"
-
-INPUT_BLOCKED = False
-
 def reset_session():
     st.session_state.messages = [
         {"role": "assistant", "content": "Yesterday evening I was really upset with Dana, we had arranged to meet for coffee yesterday after a long time we hadn't met. It's really hard for me to make plans and leave the house during this period. Half an hour before the time we arranged, after I had already arranged and come to leave, she wrote to me that she was really sorry but she couldn't, her husband was at work or something and she had to take care of the kids. Never mind, this is already the third time she's done this to me. I don't know what to think anymore.. "}
@@ -142,7 +138,7 @@ def get_director_tip():
 
     return json.loads(answer)["tip"]
 
-def add_to_sidebar_sidebar(text=None):
+def add_to_sidebar(text):
     sidebar = st.sidebar
     info_container = sidebar.container()
 
@@ -153,20 +149,6 @@ def add_to_sidebar_sidebar(text=None):
             st.success(text)
 
 def render_screen():
-    global INPUT_BLOCKED
-
-    st.markdown(
-        """
-        <style>
-            .stChatMessage, .stHeading, .stMarkdown, .stChatInput, .stTextInput, .stSelectbox, .stElementContainer {
-                text-align: left;
-                direction: ltr;
-            }
-        </style>
-        """,
-        unsafe_allow_html=True,
-    )
-
     if "messages" not in st.session_state:
         reset_session()
 
@@ -202,14 +184,14 @@ def render_screen():
             st.session_state.rounds_since_last_completion += 1
 
         for guideline in completed_guidelines:
-            add_to_sidebar_sidebar(f"Guideline '{guideline}' completed successfully.")
+            add_to_sidebar(f"Guideline '{guideline}' completed successfully.")
 
         if st.session_state.rounds_since_last_completion > 0:
             tip = get_director_tip()
-            add_to_sidebar_sidebar(f"Tip: {tip}")
+            add_to_sidebar(f"Tip: {tip}")
 
         if done:
-            add_to_sidebar_sidebar("All guidelines completed successfully!")
+            add_to_sidebar("All guidelines completed successfully!")
 
 if __name__ == "__main__":
     render_screen()
