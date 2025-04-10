@@ -2,6 +2,7 @@ import streamlit as st
 from openai import OpenAI
 import json
 import concurrent.futures
+import time
 
 client = OpenAI(api_key=st.secrets["openai_key"])
 async_context = concurrent.futures.ThreadPoolExecutor()
@@ -33,6 +34,9 @@ def reset_session():
     st.session_state.system_prompt = "You are a patient named Noa, who struggles with difficulties in dealing with conflicts with other people. You hate conflicts, in which you only do one of two options: start arguing and shouting at the other person, or leave the place, ignore, repress. Sometimes there are situations where you simply prefer to do what the other side wants even if it doesn't suit you. You are very sensitive to criticism. Your husband's name is Dor. Your good friend's name is Dana, and she has children which sometimes means she doesn't have time for you. The situation is a conversation with your psychologist. I am the psychologist and you are Noa. You should only answer Noa's responses and nothing else. You should be as responsive as possible to what the therapist said, while maintaining Noa's character and coping style. You are not the therapist, and you don't ask questions to the therapist, only respond with things related to yourself."
     st.session_state.done = False
     st.session_state.running = True
+
+    st.session_state.start_time = time.time()
+    st.session_state.end_time = None
 
 def evaluate_guidelines(state: dict):
     system = f"You are an expert in human emotions and psychology. \
@@ -97,6 +101,7 @@ def evaluate_guidelines(state: dict):
         if state['current_stage'] >= len(state['guidelines']):
             state['done'] = True
             state['running'] = False
+            state['end_time'] = time.time()
 
     return completed_guidelines, state
 
@@ -156,6 +161,7 @@ def add_to_sidebar(text):
 
 def end_session():
     st.session_state.running = False
+    st.session_state.end_time = time.time()
 
 def render_screen():
     st.sidebar.title("Tips & Progress")
@@ -205,17 +211,23 @@ def render_screen():
         if st.session_state.rounds_since_last_completion > 0:
             add_to_sidebar(f"Tip: {tip}")
 
-        if st.session_state.done:
-            add_to_sidebar("All guidelines completed successfully!")
+def render_end_screen():
+    st.title("Session Ended")
+    st.write("The session has ended. Please refresh the page to start a new session.")
+
+    if st.session_state.done:
+        st.success("All guidelines completed successfully!")
+    else:
+        st.error("Not all guidelines were completed.")
+
+    elapsed_time = st.session_state.end_time - st.session_state.start_time
+    st.write(f"Session duration: {elapsed_time:.2f} seconds")
 
 if __name__ == "__main__":
     if "running" not in st.session_state:
         reset_session()
 
     if not st.session_state.running:
-        if st.session_state.done:
-            st.success("All guidelines completed successfully!")
-        else:
-            st.warning("Finished the session, please refresh the page to start a new one.")
+        render_end_screen()
     else:
         render_screen()
