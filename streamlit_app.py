@@ -238,54 +238,83 @@ def render_screen():
     st.write("You are the therapist, help Noa with her conflict.")
     st.checkbox("Sound voice", value=st.session_state.voice, on_change=lambda: st.session_state.update({"voice": not st.session_state.voice}))
 
-    for message in st.session_state.messages:
-        with st.chat_message(message["role"]):
-            st.markdown(message["content"])
+    # Create a container for the conversation history
+    conversation_container = st.container()
 
-    if prompt := st.chat_input("Type your message here..."):
-        st.session_state.messages.append({"role": "user", "content": prompt})
-        with st.chat_message("user"):
-            st.markdown(prompt)
+    # Create a container for inputs at the bottom
+    input_container = st.container()
 
-        st.session_state.start_time = time.time()
+    # Handle inputs first (but they'll be rendered later)
+    with input_container:
+        col1, col2 = st.columns([3, 1])
+        with col1:
+            prompt = st.chat_input("Type your message here...")
+        with col2:
+            audio_bytes = st.audio_input("Or record your voice...")
 
-        stream = client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[{"role": "system", "content": st.session_state.system_prompt}] + st.session_state.messages,
-            stream=True,
-        )
+    # Process any inputs
+    if audio_bytes:
+        with st.spinner("Processing your speech..."):
+            try:
+                prompt = client.audio.transcriptions.create(
+                    model="gpt-4o-transcribe",
+                    file=audio_bytes
+                ).text
+            except Exception as e:
+                st.error(f"An error occurred during transcription: {str(e)}")
 
-        with st.chat_message("assistant"):
-            response = st.write_stream(stream)
-        st.session_state.messages.append({"role": "assistant", "content": response})
-        if st.session_state.voice:
-            with st.spinner("Generating audio..."):
-                audio_file = text_to_speech(response)
-                if audio_file:
-                    autoplay_audio(audio_file)
+    # Process the conversation and display in the conversation container
+    with conversation_container:
+        # Show existing messages
+        for message in st.session_state.messages:
+            with st.chat_message(message["role"]):
+                st.markdown(message["content"])
 
-        st.button("End Conversation", on_click=end_session)
+        # Process new input if available
+        if prompt:
+            st.session_state.messages.append({"role": "user", "content": prompt})
+            with st.chat_message("user"):
+                st.markdown(prompt)
 
-        guidelines_promise = start_promise(evaluate_guidelines, st.session_state.to_dict())
-        tip_promise = start_promise(get_director_tip, st.session_state.to_dict())
-        completed_guidelines, new_state = guidelines_promise.result()
-        tip = tip_promise.result()
+            st.session_state.start_time = time.time()
 
-        for key, value in new_state.items():
-            if key == 'reset_button':
-                continue
-            st.session_state[key] = value
+            stream = client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[{"role": "system", "content": st.session_state.system_prompt}] + st.session_state.messages,
+                stream=True,
+            )
 
-        if len(completed_guidelines) > 0:
-            st.session_state.rounds_since_last_completion = 0
-        else:
-            st.session_state.rounds_since_last_completion += 1
+            with st.chat_message("assistant"):
+                response = st.write_stream(stream)
+            st.session_state.messages.append({"role": "assistant", "content": response})
+            if st.session_state.voice:
+                with st.spinner("Generating audio..."):
+                    audio_file = text_to_speech(response)
+                    if audio_file:
+                        autoplay_audio(audio_file)
 
-        for guideline in completed_guidelines:
-            add_to_sidebar(f"Guideline '{guideline}' completed successfully.")
+            st.button("End Conversation", on_click=end_session)
 
-        if st.session_state.rounds_since_last_completion > 0:
-            add_to_sidebar(f"Tip: {tip}")
+            guidelines_promise = start_promise(evaluate_guidelines, st.session_state.to_dict())
+            tip_promise = start_promise(get_director_tip, st.session_state.to_dict())
+            completed_guidelines, new_state = guidelines_promise.result()
+            tip = tip_promise.result()
+
+            for key, value in new_state.items():
+                if key == 'reset_button':
+                    continue
+                st.session_state[key] = value
+
+            if len(completed_guidelines) > 0:
+                st.session_state.rounds_since_last_completion = 0
+            else:
+                st.session_state.rounds_since_last_completion += 1
+
+            for guideline in completed_guidelines:
+                add_to_sidebar(f"Guideline '{guideline}' completed successfully.")
+
+            if st.session_state.rounds_since_last_completion > 0:
+                add_to_sidebar(f"Tip: {tip}")
 
 def render_end_screen():
     st.title("Session Ended")
