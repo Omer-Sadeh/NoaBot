@@ -258,7 +258,8 @@ def render_screen():
             try:
                 prompt = client.audio.transcriptions.create(
                     model="gpt-4o-transcribe",
-                    file=audio_bytes
+                    file=audio_bytes,
+                    language="en"
                 ).text
             except Exception as e:
                 st.error(f"An error occurred during transcription: {str(e)}")
