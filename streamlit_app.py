@@ -21,11 +21,11 @@ def reset_session():
     st.session_state.current_stage = 0
     st.session_state.guidelines = [
         [
-            "Identifying the conflict and initial frustration - Did the therapist recognize and validate Noa’s frustration regarding the conflict?"
+            "Identifying the conflict and initial frustration - Did the therapist recognize and validate Noa's frustration regarding the conflict?"
         ],
         [
             "Identifying and framing the emotions involved in the conflict - Did the therapist help Noa articulate and frame her emotions instead of rushing to solutions?",
-            "Recognizing Noa’s coping or behavioral patterns in conflicts - Did the therapist explore Noa’s typical ways of handling conflicts?",
+            "Recognizing Noa's coping or behavioral patterns in conflicts - Did the therapist explore Noa's typical ways of handling conflicts?",
             "Defining a goal for the conflict - Did the therapist help Noa define a goal for the conversation?"
         ],
         [
@@ -252,6 +252,10 @@ def render_screen():
         with col2:
             audio_bytes = st.audio_input("Or record your voice...")
 
+    if len(st.session_state.messages) > 1:
+        # Add End Conversation button right after the input container
+        st.button("End Conversation", on_click=end_session)
+
     # Process any inputs
     if audio_bytes:
         with st.spinner("Processing your speech..."):
@@ -293,8 +297,6 @@ def render_screen():
                     audio_file = text_to_speech(response)
                     if audio_file:
                         autoplay_audio(audio_file)
-
-            st.button("End Conversation", on_click=end_session)
 
             guidelines_promise = start_promise(evaluate_guidelines, st.session_state.to_dict())
             tip_promise = start_promise(get_director_tip, st.session_state.to_dict())
