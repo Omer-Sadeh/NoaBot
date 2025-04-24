@@ -248,9 +248,9 @@ def render_screen():
     with input_container:
         col1, col2 = st.columns([3, 1])
         with col1:
-            prompt = st.chat_input("Type your message here...")
+            prompt = st.chat_input("Type your message here...", disabled=("audio_data" in st.session_state and st.session_state["audio_data"] is not None))
         with col2:
-            audio_bytes = st.audio_input("Or record your voice...")
+            audio_bytes = st.audio_input("Or record your voice...", key=f"audio_data")
 
     if len(st.session_state.messages) > 1:
         # Add End Conversation button right after the input container
