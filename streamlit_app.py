@@ -306,7 +306,8 @@ def render_screen():
             for key, value in new_state.items():
                 if key == 'reset_button':
                     continue
-                st.session_state[key] = value
+                if key != 'audio_data':
+                    st.session_state[key] = value
 
             if len(completed_guidelines) > 0:
                 st.session_state.rounds_since_last_completion = 0
