@@ -248,7 +248,8 @@ def render_screen():
     with input_container:
         col1, col2 = st.columns([3, 1])
         with col1:
-            prompt = st.chat_input("Type your message here...", disabled=("audio_data" in st.session_state and st.session_state["audio_data"] is not None))
+            placeholder = "Type your message here..." if "audio_data" not in st.session_state or st.session_state["audio_data"] is None else "Delete recorded audio to enable typing"
+            prompt = st.chat_input(placeholder, disabled=("audio_data" in st.session_state and st.session_state["audio_data"] is not None))
         with col2:
             audio_bytes = st.audio_input("Or record your voice...", key=f"audio_data")
 
