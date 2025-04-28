@@ -53,7 +53,7 @@ def reset_session():
 def evaluate_guidelines(state: dict):
     system = f"You are an expert in human emotions and psychology. \
     I will show you a part of a therapy session with Noa, a patient who is struggling with a conflict. \
-    Your goal is to evaluate the therapist's performance according to the following guidelines:"
+    Your goal is to evaluate how good the therapist encourages Noa's behaviour to be according to the following guidelines in her future conflicts:"
 
     current_guidelines = state['guidelines'][state['current_stage']]
 
@@ -143,7 +143,15 @@ def get_director_tip(state: dict):
 
     system += f"\n\nIf the therapist has completely lost direction and is not behaving as a therapist should, \
     please give a tip to the therapist on how to get back on track. \
-    Be gentle but direct, and keep it a one short sentence."
+    Be gentle but direct, and keep it a one short and concise sentence. \
+    \
+    Tone: \
+    Supportive, not corrective. \
+    Encouraging clinical thinking, not scripting dialogue. \
+    Do not not tell them what to say. \
+    Instead, guide their attention to the underlying clinical goal of the moment. \
+    Example: \
+    Tip: “Focus on acknowledging Noa's emotions.”"
 
     therapy_session = ""
     for message in state['messages']:
@@ -382,3 +390,4 @@ if __name__ == "__main__":
         render_end_screen()
     else:
         render_screen()
+        
