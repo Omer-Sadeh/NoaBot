@@ -331,23 +331,14 @@ def end_session():
         st.session_state.step_times.append(step_time)
 
 def text_to_speech(input_text):
-    # Create a temporary directory if it doesn't exist
     temp_dir = Path("temp_audio")
     temp_dir.mkdir(exist_ok=True)
-
-    # Generate a file path for the audio file
     output_path = temp_dir / "speech.mp3"
-    
-    voice_model = "gpt-4o-mini-tts" # Default voice model
-    # Potentially select voice based on language if different voice models offer better pronunciation for Hebrew
-    # For now, using one voice model and assuming it handles multiple languages or that Coral is fine for Hebrew.
-    # if st.session_state.get("language", "en") == "he":
-    #     voice_model = "some_hebrew_optimized_tts_model_if_available"
 
     try:
         with client.audio.speech.with_streaming_response.create(
-                model=voice_model, # Use the potentially language-specific voice model
-                voice="coral", # Voice selection might also be language dependent
+                model="gpt-4o-mini-tts",
+                voice="coral",
                 input=input_text
         ) as response:
             response.stream_to_file(output_path)
