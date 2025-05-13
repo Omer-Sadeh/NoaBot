@@ -10,13 +10,17 @@ import time
 client = OpenAI(api_key=st.secrets["openai_key"])
 async_context = concurrent.futures.ThreadPoolExecutor()
 
+def load_prompt(file_path: str) -> str:
+    with open(file_path, "r", encoding="utf-8") as f:
+        return f.read().strip()
+
 def start_promise(function: callable, *args, **kwargs) -> concurrent.futures.Future:
     global async_context
     return async_context.submit(function, *args, **kwargs)
 
 def reset_session():
     st.session_state.messages = [
-        {"role": "assistant", "content": "Yesterday evening I was really upset with Dana, we had arranged to meet for coffee yesterday after a long time we hadn't met. It's really hard for me to make plans and leave the house during this period. Half an hour before the time we arranged, after I had already arranged and come to leave, she wrote to me that she was really sorry but she couldn't, her husband was at work or something and she had to take care of the kids. Never mind, this is already the third time she's done this to me. I don't know what to think anymore.. "}
+        {"role": "assistant", "content": load_prompt("prompts/en/initial_message.txt")}
     ]
     st.session_state.current_stage = 0
     st.session_state.guidelines = [
@@ -34,7 +38,7 @@ def reset_session():
         ]
     ]
     st.session_state.rounds_since_last_completion = 0
-    st.session_state.system_prompt = "You are a patient named Noa, who struggles with difficulties in dealing with conflicts with other people. You hate conflicts, in which you only do one of two options: start arguing and shouting at the other person, or leave the place, ignore, repress. Sometimes there are situations where you simply prefer to do what the other side wants even if it doesn't suit you. You are very sensitive to criticism. Your husband's name is Dor. Your good friend's name is Dana, and she has children which sometimes means she doesn't have time for you. The situation is a conversation with your psychologist. I am the psychologist and you are Noa. You should only answer Noa's responses and nothing else. You should be as responsive as possible to what the therapist said, while maintaining Noa's character and coping style. You are not the therapist, and you don't ask questions to the therapist, only respond with things related to yourself. Your responses should not be longer than 2-3 sentences."
+    st.session_state.system_prompt = load_prompt("prompts/en/system_prompt_noa.txt")
     st.session_state.done = False
     st.session_state.running = True
 
@@ -51,20 +55,14 @@ def reset_session():
     st.session_state.voice = False
 
 def evaluate_guidelines(state: dict):
-    system = f"You are an expert in human emotions and psychology. \
-    I will show you a part of a therapy session with Noa, a patient who is struggling with a conflict. \
-    Your goal is to evaluate how good the therapist encourages Noa's behaviour to be according to the following guidelines in her future conflicts:"
+    prompt_template = load_prompt("prompts/en/evaluate_guidelines_system.txt")
 
-    current_guidelines = state['guidelines'][state['current_stage']]
+    current_guidelines_list = state['guidelines'][state['current_stage']]
+    guidelines_section_text = ""
+    for idx, guideline_text in enumerate(current_guidelines_list):
+        guidelines_section_text += f"\n\n{idx+1}. {guideline_text}"
 
-    for idx, guideline in enumerate(current_guidelines):
-        system += f"\n\n{idx+1}. {guideline}"
-
-    system += f"\n\nMark a guideline as completed if and only if the therapist has completed it, and it has absolutely \
-    been a part of the conversation, not indirectly but very obviously. \
-    A guideline is completed only if has been attempted by the therapist. \
-    If the guideline was completed by Noa with no help from the therapist, \
-    please do not mark it as completed."
+    system = prompt_template.format(guidelines_section=guidelines_section_text)
 
     therapy_session = ""
     for message in state['messages']:
@@ -100,7 +98,7 @@ def evaluate_guidelines(state: dict):
     updated_guidelines = []
     completed_guidelines = []
 
-    for idx, guideline in enumerate(current_guidelines):
+    for idx, guideline in enumerate(current_guidelines_list):
         if idx + 1 not in completed_idxs:
             updated_guidelines.append(guideline)
         else:
@@ -131,27 +129,14 @@ def evaluate_guidelines(state: dict):
     return completed_guidelines, state
 
 def get_director_tip(state: dict):
-    system = f"You are an expert in human emotions and psychology. \
-    I will show you a part of a therapy session with Noa, a patient who is struggling with a conflict. \
-    Your goal is to give the therapist the best tip for improving the therapy session. \
-    The therapist has the following guidelines to accomplish:"
+    prompt_template = load_prompt("prompts/en/get_director_tip_system.txt")
 
-    current_guidelines = state['guidelines'][state['current_stage']]
+    current_guidelines_list = state['guidelines'][state['current_stage']]
+    guidelines_section_text = ""
+    for idx, guideline_text in enumerate(current_guidelines_list):
+        guidelines_section_text += f"\n\n{idx+1}. {guideline_text}"
 
-    for idx, guideline in enumerate(current_guidelines):
-        system += f"\n\n{idx+1}. {guideline}"
-
-    system += f"\n\nIf the therapist has completely lost direction and is not behaving as a therapist should, \
-    please give a tip to the therapist on how to get back on track. \
-    Be gentle but direct, and keep it a one short and concise sentence. \
-    \
-    Tone: \
-    Supportive, not corrective. \
-    Encouraging clinical thinking, not scripting dialogue. \
-    Do not not tell them what to say. \
-    Instead, guide their attention to the underlying clinical goal of the moment. \
-    Example: \
-    Tip: “Focus on acknowledging Noa's emotions.”"
+    system = prompt_template.format(guidelines_section=guidelines_section_text)
 
     therapy_session = ""
     for message in state['messages']:
@@ -390,4 +375,3 @@ if __name__ == "__main__":
         render_end_screen()
     else:
         render_screen()
-        
