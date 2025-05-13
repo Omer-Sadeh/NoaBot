@@ -10,9 +10,22 @@ import time
 client = OpenAI(api_key=st.secrets["openai_key"])
 async_context = concurrent.futures.ThreadPoolExecutor()
 
-def load_prompt(file_path: str) -> str:
-    with open(file_path, "r", encoding="utf-8") as f:
+def load_prompt(file_path: str, language: str = "en") -> str:
+    full_path = f"prompts/{language}/{file_path}"
+    with open(full_path, "r", encoding="utf-8") as f:
         return f.read().strip()
+
+def load_guidelines(language: str = "en") -> list:
+    file_path = f"prompts/{language}/guidelines.json"
+    try:
+        with open(file_path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except FileNotFoundError:
+        st.error(f"Guidelines file not found: {file_path}")
+        return []
+    except json.JSONDecodeError:
+        st.error(f"Error decoding JSON from guidelines file: {file_path}")
+        return []
 
 def start_promise(function: callable, *args, **kwargs) -> concurrent.futures.Future:
     global async_context
@@ -20,25 +33,12 @@ def start_promise(function: callable, *args, **kwargs) -> concurrent.futures.Fut
 
 def reset_session():
     st.session_state.messages = [
-        {"role": "assistant", "content": load_prompt("prompts/en/initial_message.txt")}
+        {"role": "assistant", "content": load_prompt("initial_message.txt", st.session_state.get("language", "en"))}
     ]
     st.session_state.current_stage = 0
-    st.session_state.guidelines = [
-        [
-            "Identifying the conflict and initial frustration - Did the therapist recognize and validate Noa's frustration regarding the conflict?"
-        ],
-        [
-            "Identifying and framing the emotions involved in the conflict - Did the therapist help Noa articulate and frame her emotions instead of rushing to solutions?",
-            "Recognizing Noa's coping or behavioral patterns in conflicts - Did the therapist explore Noa's typical ways of handling conflicts?",
-            "Defining a goal for the conflict - Did the therapist help Noa define a goal for the conversation?"
-        ],
-        [
-            "Practicing assertive communication - Did the therapist prompt Noa to practice formulating an assertive message for the conversation?",
-            "Creating a compromise or summary that supports a healthy resolution - Did the therapist assist Noa in drawing conclusions and considering a compromise?"
-        ]
-    ]
+    st.session_state.guidelines = load_guidelines(st.session_state.get("language", "en"))
     st.session_state.rounds_since_last_completion = 0
-    st.session_state.system_prompt = load_prompt("prompts/en/system_prompt_noa.txt")
+    st.session_state.system_prompt = load_prompt("system_prompt_noa.txt", st.session_state.get("language", "en"))
     st.session_state.done = False
     st.session_state.running = True
 
@@ -53,9 +53,11 @@ def reset_session():
     st.session_state.tips_shown = 0
 
     st.session_state.voice = False
+    if "language" not in st.session_state:
+        st.session_state.language = "en"
 
 def evaluate_guidelines(state: dict):
-    prompt_template = load_prompt("prompts/en/evaluate_guidelines_system.txt")
+    prompt_template = load_prompt("evaluate_guidelines_system.txt", state.get("language", "en"))
 
     current_guidelines_list = state['guidelines'][state['current_stage']]
     guidelines_section_text = ""
@@ -129,7 +131,7 @@ def evaluate_guidelines(state: dict):
     return completed_guidelines, state
 
 def get_director_tip(state: dict):
-    prompt_template = load_prompt("prompts/en/get_director_tip_system.txt")
+    prompt_template = load_prompt("get_director_tip_system.txt", state.get("language", "en"))
 
     current_guidelines_list = state['guidelines'][state['current_stage']]
     guidelines_section_text = ""
@@ -225,7 +227,22 @@ def autoplay_audio(file_path):
     st.markdown(md_html, unsafe_allow_html=True)
 
 def render_screen():
+    def set_language(lang):
+        st.session_state.language = lang
+        reset_session()
+        st.rerun()
+
     st.sidebar.title("Tips & Progress")
+    
+    lang_options = {"English": "en", "עברית": "he"}
+    selected_lang_key = st.sidebar.selectbox(
+        "Language / שפה",
+        options=list(lang_options.keys()),
+        index=list(lang_options.values()).index(st.session_state.language)
+    )
+
+    if lang_options[selected_lang_key] != st.session_state.language:
+        set_language(lang_options[selected_lang_key])
 
     st.title("Talk with Noa")
     st.write("You are the therapist, help Noa with her conflict.")
@@ -257,7 +274,7 @@ def render_screen():
                 prompt = client.audio.transcriptions.create(
                     model="gpt-4o-transcribe",
                     file=audio_bytes,
-                    language="en"
+                    language=st.session_state.language
                 ).text
             except Exception as e:
                 st.error(f"An error occurred during transcription: {str(e)}")
