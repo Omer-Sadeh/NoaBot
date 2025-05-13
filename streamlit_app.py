@@ -219,6 +219,7 @@ def reset_session():
     st.session_state.completed_guidelines = 0
 
     st.session_state.tips_shown = 0
+    st.session_state.sidebar_messages = [] # Initialize sidebar messages
 
     st.session_state.voice = False
     if "language" not in st.session_state:
@@ -337,30 +338,16 @@ def get_director_tip(state: dict):
 
     return json.loads(answer)["tip"]
 
-def add_to_sidebar(text):
-    sidebar = st.sidebar
-    info_container = sidebar.container()
-    current_lang = st.session_state.get("language", "en")
+def add_to_sidebar(content: str, message_type: str):
+    """Adds a message to the persistent sidebar_messages list in session_state."""
+    if "sidebar_messages" not in st.session_state:
+        st.session_state.sidebar_messages = []
 
-    with info_container:
-        # Check if the text starts with the English or Hebrew tip prefix before translation
-        is_tip = False
-        english_tip_prefix = TRANSLATIONS["en"]["tip_sidebar_prefix"]
-        hebrew_tip_prefix = TRANSLATIONS["he"]["tip_sidebar_prefix"]
+    st.session_state.sidebar_messages.append({'type': message_type, 'content': content})
 
-        if text.startswith(english_tip_prefix) or text.startswith(hebrew_tip_prefix):
-            is_tip = True
-            # Remove the prefix to avoid double prefixing if 'text' is already translated.
-            if text.startswith(english_tip_prefix):
-                actual_tip_content = text[len(english_tip_prefix):].strip()
-            else: # text.startswith(hebrew_tip_prefix)
-                actual_tip_content = text[len(hebrew_tip_prefix):].strip()
-            
-            # Display with the correct language prefix
-            st.warning(f"{tr('tip_sidebar_prefix', current_lang)} {actual_tip_content}")
-            st.session_state.tips_shown += 1
-        else:
-            st.success(text) # Guideline messages are fully formed with tr() before calling this
+    if message_type == 'tip':
+        # tips_shown is initialized in reset_session
+        st.session_state.tips_shown += 1
 
 def end_session():
     st.session_state.running = False
@@ -423,6 +410,7 @@ def render_screen():
         ]
         st.session_state.guidelines = load_guidelines(lang)
         st.session_state.system_prompt = load_prompt(tr("system_prompt_file"), lang)
+        st.session_state.sidebar_messages = [] # Reset sidebar messages on language change
         # No need to call full reset_session() as other parts might not need reset or are reset by Streamlit's flow
         st.rerun()
 
@@ -445,6 +433,18 @@ def render_screen():
 
     if lang_options[selected_lang_key] != current_lang:
         set_language(lang_options[selected_lang_key])
+
+    # Container for all persistent messages
+    message_display_container = st.sidebar.container()
+
+    # Render persistent sidebar messages
+    if "sidebar_messages" in st.session_state and st.session_state.sidebar_messages:
+        with message_display_container:
+            for message_info in st.session_state.sidebar_messages:
+                if message_info['type'] == 'tip':
+                    st.warning(f"{tr('tip_sidebar_prefix', current_lang)} {message_info['content']}")
+                elif message_info['type'] == 'guideline':
+                    st.success(message_info['content'])
 
     st.title(tr("app_title", current_lang))
     st.write(tr("app_subtitle", current_lang))
@@ -533,10 +533,13 @@ def render_screen():
                 st.session_state.rounds_since_last_completion += 1
 
             for guideline in completed_guidelines:
-                add_to_sidebar(tr("guideline_completed_sidebar", current_lang, guideline=guideline))
+                add_to_sidebar(tr("guideline_completed_sidebar", current_lang, guideline=guideline), message_type='guideline')
 
             if st.session_state.rounds_since_last_completion > 0 and tip: # Ensure tip is not None
-                add_to_sidebar(f"{tr('tip_sidebar_prefix', current_lang)} {tip}") # Tip content itself is from LLM, may not be translated by `tr`
+                add_to_sidebar(tip, message_type='tip') # Tip content itself is from LLM
+
+            # Force a rerun to update the UI immediately with new chat messages and sidebar content
+            st.rerun()
 
 def render_end_screen():
     current_lang = st.session_state.get("language", "en")
@@ -599,6 +602,8 @@ Conversation Transcript: \n\
 if __name__ == "__main__":
     if "language" not in st.session_state: # Ensure language is set at the very beginning
         st.session_state.language = "en" # Default to English
+    if "sidebar_messages" not in st.session_state: # Ensure sidebar_messages is initialized
+        st.session_state.sidebar_messages = []
 
     if "running" not in st.session_state:
         reset_session() # This will now use the language from session_state
