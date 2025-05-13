@@ -7,85 +7,40 @@ import json
 import concurrent.futures
 import time
 
-# --- START Internationalization ---
-TRANSLATIONS = {
-    "en": {
-        "tips_progress": "Tips & Progress",
-        "language_label": "Language / שפה",
-        "app_title": "Talk with Noa",
-        "app_subtitle": "You are the therapist, help Noa with her conflict.",
-        "sound_voice_checkbox": "Sound voice",
-        "chat_placeholder_typing": "Type your message here...",
-        "chat_placeholder_audio": "Delete recorded audio to enable typing",
-        "audio_input_label": "Or record your voice...",
-        "end_conversation_button": "End Conversation",
-        "processing_speech_spinner": "Processing your speech...",
-        "transcription_error": "An error occurred during transcription: {error}",
-        "generating_audio_spinner": "Generating audio...",
-        "audio_generation_error": "Error generating audio: {error}",
-        "guideline_completed_sidebar": "Guideline '{guideline}' completed successfully.",
-        "tip_sidebar_prefix": "Tip:",
-        "session_ended_title": "Session Ended",
-        "session_ended_subtitle": "The session has ended. Please refresh the page to start a new session.",
-        "all_guidelines_completed_success": "All guidelines completed successfully!",
-        "not_all_guidelines_completed_error": "Not all guidelines were completed.",
-        "conversation_duration_label": "Conversation Duration: {duration}",
-        "minutes_unit": "minutes",
-        "seconds_unit": "seconds",
-        "user_messages_label": "Number of user messages: {count}",
-        "completed_steps_label": "Number of completed Steps: {count}",
-        "completed_criteria_label": "Number of Completed Criteria: {count}",
-        "time_on_each_step_label": "Time on Each Step (min): {times}",
-        "tips_shown_label": "Number of tips shown: {count}",
-        "thank_you_message": "Thank you for participating in this session!",
-        "save_results_button": "Save Results + Transcript",
-        "initial_message_prompt_file": "initial_message.txt",
-        "system_prompt_file": "system_prompt_noa.txt",
-        "evaluate_guidelines_prompt_file": "evaluate_guidelines_system.txt",
-        "get_director_tip_prompt_file": "get_director_tip_system.txt",
-    },
-    "he": {
-        "tips_progress": "טיפים והתקדמות",
-        "language_label": "Language / שפה", # Already bilingual
-        "app_title": "שוחח/י עם נועה",
-        "app_subtitle": "את/ה המטפל/ת, עזור/עזרי לנועה עם הקונפליקט שלה.",
-        "sound_voice_checkbox": "הפעל קול",
-        "chat_placeholder_typing": "הקלד/י את הודעתך כאן...",
-        "chat_placeholder_audio": "מחק/י את ההקלטה כדי לאפשר הקלדה",
-        "audio_input_label": "או הקלט/י את קולך...",
-        "end_conversation_button": "סיים שיחה",
-        "processing_speech_spinner": "מעבד את דיבורך...",
-        "transcription_error": "אירעה שגיאה בתמלול: {error}",
-        "generating_audio_spinner": "יוצר שמע...",
-        "audio_generation_error": "שגיאה ביצירת שמע: {error}",
-        "guideline_completed_sidebar": "הנחיה '{guideline}' הושלמה בהצלחה.",
-        "tip_sidebar_prefix": "טיפ:",
-        "session_ended_title": "הסשן הסתיים",
-        "session_ended_subtitle": "הסשן הסתיים. אנא רענן/י את הדף כדי להתחיל סשן חדש.",
-        "all_guidelines_completed_success": "כל ההנחיות הושלמו בהצלחה!",
-        "not_all_guidelines_completed_error": "לא כל ההנחיות הושלמו.",
-        "conversation_duration_label": "משך השיחה: {duration}",
-        "minutes_unit": "דקות",
-        "seconds_unit": "שניות",
-        "user_messages_label": "מספר הודעות משתמש: {count}",
-        "completed_steps_label": "מספר שלבים שהושלמו: {count}",
-        "completed_criteria_label": "מספר קריטריונים שהושלמו: {count}",
-        "time_on_each_step_label": "זמן בכל שלב (דקות): {times}",
-        "tips_shown_label": "מספר טיפים שהוצגו: {count}",
-        "thank_you_message": "תודה על השתתפותך בסשן!",
-        "save_results_button": "שמור תוצאות + תמלול",
-        "initial_message_prompt_file": "initial_message.txt", # Assuming prompt files are also named differently or handled by load_prompt
-        "system_prompt_file": "system_prompt_noa.txt",
-        "evaluate_guidelines_prompt_file": "evaluate_guidelines_system.txt",
-        "get_director_tip_prompt_file": "get_director_tip_system.txt",
-    }
-}
+def load_translations(language: str = "en") -> dict:
+    """Load translations from a JSON file."""
+    file_path = f"prompts/{language}/translations.json"
+    try:
+        with open(file_path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except FileNotFoundError:
+        st.error(f"Translations file not found: {file_path}")
+        # Fallback to English if the translations for the selected language are not found
+        if language != "en":
+            st.warning(f"Falling back to English translations.")
+            file_path_en = f"prompts/en/translations.json"
+            try:
+                with open(file_path_en, "r", encoding="utf-8") as f:
+                    return json.load(f)
+            except FileNotFoundError:
+                st.error(f"English fallback translations file also not found: {file_path_en}")
+                return {} # Return empty dict if English fallback also fails
+        return {} # Return empty dict if primary language file not found (and it was English)
+    except json.JSONDecodeError:
+        st.error(f"Error decoding JSON from translations file: {file_path}")
+        return {}
 
 def tr(key: str, lang: str = None, **kwargs) -> str:
     """Get translated string."""
     if lang is None:
         lang = st.session_state.get("language", "en")
-    return TRANSLATIONS.get(lang, TRANSLATIONS["en"]).get(key, key).format(**kwargs)
+    
+    # Ensure translations are loaded for the current language
+    if "translations" not in st.session_state or st.session_state.get("translations_lang") != lang:
+        st.session_state.translations = load_translations(lang)
+        st.session_state.translations_lang = lang
+
+    return st.session_state.translations.get(key, key).format(**kwargs)
 
 def set_page_direction(lang: str = None):
     if lang is None:
@@ -160,7 +115,6 @@ def set_page_direction(lang: str = None):
             """,
             unsafe_allow_html=True,
         )
-# --- END Internationalization ---
 
 client = OpenAI(api_key=st.secrets["openai_key"])
 async_context = concurrent.futures.ThreadPoolExecutor()
@@ -224,6 +178,11 @@ def reset_session():
     st.session_state.voice = False
     if "language" not in st.session_state:
         st.session_state.language = "en"
+
+    # Ensure translations are loaded at the start of a session
+    if "translations" not in st.session_state or st.session_state.get("translations_lang") != st.session_state.language:
+        st.session_state.translations = load_translations(st.session_state.language)
+        st.session_state.translations_lang = st.session_state.language
 
 def evaluate_guidelines(state: dict):
     prompt_template = load_prompt(tr("evaluate_guidelines_prompt_file", state.get("language", "en")), state.get("language", "en"))
@@ -419,7 +378,9 @@ def render_screen():
         st.session_state.guidelines = load_guidelines(lang)
         st.session_state.system_prompt = load_prompt(tr("system_prompt_file"), lang)
         st.session_state.sidebar_messages = [] # Reset sidebar messages on language change
-        # No need to call full reset_session() as other parts might not need reset or are reset by Streamlit's flow
+        # Load translations for the new language
+        st.session_state.translations = load_translations(lang)
+        st.session_state.translations_lang = lang
         st.rerun()
 
     current_lang = st.session_state.get("language", "en")
@@ -616,6 +577,9 @@ Conversation Transcript: \n\
 if __name__ == "__main__":
     if "language" not in st.session_state: # Ensure language is set at the very beginning
         st.session_state.language = "en" # Default to English
+    if "translations" not in st.session_state or st.session_state.get("translations_lang") != st.session_state.language: # Ensure translations are loaded initially
+        st.session_state.translations = load_translations(st.session_state.language)
+        st.session_state.translations_lang = st.session_state.language
     if "sidebar_messages" not in st.session_state: # Ensure sidebar_messages is initialized
         st.session_state.sidebar_messages = []
 
