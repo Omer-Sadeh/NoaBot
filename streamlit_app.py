@@ -343,11 +343,19 @@ def add_to_sidebar(content: str, message_type: str):
     if "sidebar_messages" not in st.session_state:
         st.session_state.sidebar_messages = []
 
-    st.session_state.sidebar_messages.append({'type': message_type, 'content': content})
+    message_id = time.time_ns() # Generate a unique ID for the message
+    st.session_state.sidebar_messages.append({'id': message_id, 'type': message_type, 'content': content})
 
     if message_type == 'tip':
-        # tips_shown is initialized in reset_session
         st.session_state.tips_shown += 1
+
+def remove_sidebar_message(message_id_to_remove):
+    """Removes a specific message from the sidebar_messages list by its ID."""
+    if "sidebar_messages" in st.session_state:
+        st.session_state.sidebar_messages = [
+            msg for msg in st.session_state.sidebar_messages if msg.get('id') != message_id_to_remove
+        ]
+        st.rerun() # Rerun to reflect changes in the sidebar immediately
 
 def end_session():
     st.session_state.running = False
@@ -442,7 +450,13 @@ def render_screen():
         with message_display_container:
             for message_info in st.session_state.sidebar_messages:
                 if message_info['type'] == 'tip':
-                    st.warning(f"{tr('tip_sidebar_prefix', current_lang)} {message_info['content']}")
+                    col1, col2 = st.columns([0.85, 0.15]) # Adjust column ratios as needed
+                    with col1:
+                        st.warning(f"{tr('tip_sidebar_prefix', current_lang)} {message_info['content']}")
+                    with col2:
+                        if st.button("X", key=f"remove_tip_{message_info['id']}", help="Remove this tip"):
+                            remove_sidebar_message(message_info['id'])
+                            # No need to explicitly call st.rerun() here as remove_sidebar_message does it
                 elif message_info['type'] == 'guideline':
                     st.success(message_info['content'])
 
