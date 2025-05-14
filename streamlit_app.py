@@ -374,6 +374,10 @@ def render_screen():
     current_lang = st.session_state.get("language", "en")
     set_page_direction(current_lang) # Apply RTL/LTR styling
 
+    # Initialize audio iteration count if not present
+    if "audio_iteration_count" not in st.session_state:
+        st.session_state.audio_iteration_count = 0
+
     if "tip_ids_to_remove" in st.session_state and st.session_state.tip_ids_to_remove:
         ids_that_were_removed = st.session_state.tip_ids_to_remove.copy()
         st.session_state.sidebar_messages = [
@@ -453,29 +457,58 @@ def render_screen():
     with input_container:
         col1, col2 = st.columns([3, 1])
         with col1:
-            placeholder_key = "chat_placeholder_audio" if "audio_data" in st.session_state and st.session_state["audio_data"] is not None else "chat_placeholder_typing"
-            prompt = st.chat_input(tr(placeholder_key, current_lang), disabled=("audio_data" in st.session_state and st.session_state["audio_data"] is not None))
+            # Define the specific session state key for the audio input
+            # This key will now change with each successful audio submission to reset the widget
+            audio_input_key = f"audio_data_{current_lang}_{st.session_state.audio_iteration_count}"
+            
+            # Chat input is disabled if there's a pending audio transcript to be processed from a previous rerun
+            chat_input_disabled = "pending_audio_transcript" in st.session_state
+            placeholder_text_key = "chat_placeholder_audio" if chat_input_disabled else "chat_placeholder_typing"
+            
+            chat_input_value = st.chat_input(
+                tr(placeholder_text_key, current_lang),
+                disabled=chat_input_disabled 
+            )
         with col2:
-            audio_bytes = st.audio_input(tr("audio_input_label", current_lang), key=f"audio_data_{current_lang}") # Ensure key changes with lang to reset if needed
+            # audio_bytes gets the value from the audio input widget for this run
+            audio_bytes = st.audio_input(
+                tr("audio_input_label", current_lang),
+                key=audio_input_key # Dynamic key
+            )
 
     if len(st.session_state.messages) > 1:
         # Add End Conversation button right after the input container
         st.button(tr("end_conversation_button", current_lang), on_click=end_session)
 
-    # Process any inputs
-    if audio_bytes:
+    # Process any inputs: first audio, then chat input if no audio was processed in this cycle.
+    prompt_for_llm = None
+
+    if audio_bytes: # If new audio was provided in this script run
         with st.spinner(tr("processing_speech_spinner", current_lang)):
             try:
-                # Ensure the audio file object is correctly named for the API
-                audio_file_for_transcription = ("audio.wav", audio_bytes, "audio/wav") # Assuming wav, adjust if audio_input gives different format
-                prompt = client.audio.transcriptions.create(
-                    model="gpt-4o-transcribe", # Consider if a specific model is better for Hebrew
+                audio_file_for_transcription = ("audio.wav", audio_bytes, "audio/wav")
+                transcribed_text = client.audio.transcriptions.create(
+                    model="gpt-4o-transcribe", 
                     file=audio_file_for_transcription,
-                    language=current_lang # Pass current language to transcription
+                    language=current_lang 
                 ).text
+                st.session_state.pending_audio_transcript = transcribed_text
+                st.session_state.audio_iteration_count += 1
+                st.rerun() # Rerun to use new audio key & process transcript
             except Exception as e:
                 st.error(tr("transcription_error", current_lang, error=str(e)))
-                prompt = None # Ensure prompt is None if transcription fails
+                # If transcription fails, we might still want to increment and rerun 
+                # to clear the audio input, or handle it differently.
+                # For now, let's ensure the input is cleared to prevent loops on error.
+                st.session_state.audio_iteration_count += 1 
+                st.rerun()
+
+    # Check for a pending transcript from a previous audio processing cycle (after rerun)
+    if "pending_audio_transcript" in st.session_state:
+        prompt_for_llm = st.session_state.pending_audio_transcript
+        del st.session_state.pending_audio_transcript
+    elif chat_input_value: # If no audio was processed, use chat input value
+        prompt_for_llm = chat_input_value
 
     # Process the conversation and display in the conversation container
     with conversation_container:
@@ -484,11 +517,11 @@ def render_screen():
             with st.chat_message(message["role"]):
                 st.markdown(message["content"])
 
-        # Process new input if available
-        if prompt:
-            st.session_state.messages.append({"role": "user", "content": prompt})
+        # Process new input if available (now from prompt_for_llm)
+        if prompt_for_llm:
+            st.session_state.messages.append({"role": "user", "content": prompt_for_llm})
             with st.chat_message("user"):
-                st.markdown(prompt)
+                st.markdown(prompt_for_llm)
 
             st.session_state.start_time = time.time()
 
