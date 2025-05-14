@@ -308,13 +308,10 @@ def add_to_sidebar(content: str, message_type: str):
     if message_type == 'tip':
         st.session_state.tips_shown += 1
 
-def remove_sidebar_message(message_id_to_remove):
-    """Removes a specific message from the sidebar_messages list by its ID."""
-    if "sidebar_messages" in st.session_state:
-        st.session_state.sidebar_messages = [
-            msg for msg in st.session_state.sidebar_messages if msg.get('id') != message_id_to_remove
-        ]
-        st.rerun() # Rerun to reflect changes in the sidebar immediately
+def _mark_tip_for_removal(tip_id: str):
+    if "tip_ids_to_remove" not in st.session_state:
+        st.session_state.tip_ids_to_remove = set()
+    st.session_state.tip_ids_to_remove.add(tip_id)
 
 def end_session():
     st.session_state.running = False
@@ -377,6 +374,15 @@ def render_screen():
     current_lang = st.session_state.get("language", "en")
     set_page_direction(current_lang) # Apply RTL/LTR styling
 
+    if "tip_ids_to_remove" in st.session_state and st.session_state.tip_ids_to_remove:
+        ids_that_were_removed = st.session_state.tip_ids_to_remove.copy()
+        st.session_state.sidebar_messages = [
+            msg for msg in st.session_state.sidebar_messages 
+            if not (msg.get('type') == 'tip' and msg.get('id') in ids_that_were_removed)
+        ]
+        st.session_state.tip_ids_to_remove.clear()
+        st.rerun()
+
     st.sidebar.title(tr("tips_progress", current_lang))
     
     lang_options = {"English": "en", "עברית": "he"}
@@ -394,6 +400,22 @@ def render_screen():
     if lang_options[selected_lang_key] != current_lang:
         set_language(lang_options[selected_lang_key])
 
+    any_tips_removed = False
+    if "sidebar_messages" in st.session_state:
+        messages_to_keep = []
+        for message_info in st.session_state.sidebar_messages:
+            if message_info['type'] == 'tip':
+                button_key = f"remove_tip_{message_info['id']}"
+                if button_key in st.session_state and st.session_state[button_key]:
+                    any_tips_removed = True
+                    st.session_state[button_key] = False
+                    continue 
+            messages_to_keep.append(message_info)
+        
+        if any_tips_removed:
+            st.session_state.sidebar_messages = messages_to_keep
+            st.rerun()
+
     # Container for all persistent messages
     message_display_container = st.sidebar.container()
 
@@ -406,9 +428,14 @@ def render_screen():
                     with col1:
                         st.warning(f"{tr('tip_sidebar_prefix', current_lang)} {message_info['content']}")
                     with col2:
-                        if st.button("X", key=f"remove_tip_{message_info['id']}", help="Remove this tip"):
-                            remove_sidebar_message(message_info['id'])
-                            # No need to explicitly call st.rerun() here as remove_sidebar_message does it
+                        # Button click now calls _mark_tip_for_removal via on_click
+                        st.button(
+                            "X", 
+                            key=f"remove_btn_{message_info['id']}", 
+                            help="Remove this tip",
+                            on_click=_mark_tip_for_removal,
+                            args=(message_info['id'],)
+                        )
                 elif message_info['type'] == 'guideline':
                     st.success(message_info['content'])
 
@@ -484,25 +511,42 @@ def render_screen():
 
             guidelines_promise = start_promise(evaluate_guidelines, st.session_state.to_dict())
             tip_promise = start_promise(get_director_tip, st.session_state.to_dict())
-            completed_guidelines, new_state = guidelines_promise.result()
-            tip = tip_promise.result()
+            
+            completed_guidelines_list, new_state_dict_from_eval = guidelines_promise.result() 
+            tip_text = tip_promise.result()
 
-            for key, value in new_state.items():
-                if key == 'reset_button':
-                    continue
-                if key != f"audio_data_{current_lang}":
-                    st.session_state[key] = value
+            # Define the specific keys that evaluate_guidelines is expected to modify in the session state.
+            # These are keys related to the application's core logic, not UI widget states.
+            logic_keys_managed_by_evaluate_guidelines = [
+                "guidelines",  # List of lists of guideline strings
+                "current_stage",  # Integer, index for the current stage
+                "step_times",  # List of floats/integers, time spent on each step
+                "step_user_messages_amount",  # List of integers, user messages per step
+                "done",  # Boolean, True if all stages completed
+                "running",  # Boolean, False if session ended manually or all stages done
+                "end_time",  # Float/None, timestamp of session end
+                "completed_guidelines" # Integer, count of all completed criteria
+            ]
 
-            if len(completed_guidelines) > 0:
+            for key_to_update in logic_keys_managed_by_evaluate_guidelines:
+                if key_to_update in new_state_dict_from_eval:
+                    st.session_state[key_to_update] = new_state_dict_from_eval[key_to_update]
+                # else:
+                    # Optional: Handle cases where an expected key is missing from new_state_dict_from_eval,
+                    # though this shouldn't happen if evaluate_guidelines is consistent.
+                    # st.warning(f"Expected key '{key_to_update}' not found in state returned by evaluate_guidelines.")
+
+            # Update rounds_since_last_completion based on completed_guidelines_list
+            if completed_guidelines_list: # Check if it's not None and not empty
                 st.session_state.rounds_since_last_completion = 0
             else:
                 st.session_state.rounds_since_last_completion += 1
 
-            for guideline in completed_guidelines:
+            for guideline in completed_guidelines_list:
                 add_to_sidebar(tr("guideline_completed_sidebar", current_lang, guideline=guideline), message_type='guideline')
 
-            if st.session_state.rounds_since_last_completion > 0 and tip: # Ensure tip is not None
-                add_to_sidebar(tip, message_type='tip') # Tip content itself is from LLM
+            if st.session_state.rounds_since_last_completion > 0 and tip_text: # Ensure tip is not None
+                add_to_sidebar(tip_text, message_type='tip') # Tip content itself is from LLM
 
             # Force a rerun to update the UI immediately with new chat messages and sidebar content
             st.rerun()
