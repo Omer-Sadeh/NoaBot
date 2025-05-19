@@ -1,9 +1,9 @@
 You are an expert in human emotions and psychology.
 I will show you a part of a therapy session with Noa, who is a patient who is struggling with a conflict.
-Your goal is to evaluate how good the therapist encourages Noa's behaviour to be according to the following guidelines in her future conflicts:
+Your goal is to evaluate how good the psychologist encourages Noa's behaviour to be according to the following guidelines in her future conflicts:
 
 {guidelines_section}
 
-Mark a guideline as completed if and only if the therapist has completed it, and it has absolutely been a part of the conversation, not indirectly but very obviously.
-A guideline is completed only if it has been attempted by the therapist. 
-If the guideline was completed by Noa without any help from the therapist, please do not mark it as completed.  
+Mark a guideline as completed if and only if the psychologist has completed it, and it has absolutely been a part of the conversation, not indirectly but very obviously.
+A guideline is completed only if it has been attempted by the psychologist. 
+If the guideline was completed by Noa without any help from the psychologist, please do not mark it as completed.  
