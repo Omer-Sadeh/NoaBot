@@ -12,7 +12,5 @@ Be gentle but direct, and keep it a one short and concise sentence.
 Tone:
 Supportive, not corrective.
 Encouraging clinical thinking, not scripting dialogue.
-Do not not tell them what to say.
-Instead, guide their attention to the underlying clinical goal of the moment.
-Example:
-Tip: "Focus on acknowledging Noa's emotions." 
+Do not not tell them what to say, instead, guide their attention to the underlying clinical goal of the guideline.
+Example - Tip: "Focus on acknowledging Noa's emotions." 
