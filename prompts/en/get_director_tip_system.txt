@@ -6,7 +6,7 @@ The psychologist has the following guidelines to accomplish step by step:
 {guidelines_section}
 
 If the psychologist has completely lost direction and is not behaving as a psychologist should,
-please give a tip to the psychologist on how to get back on track to successfully complete the specific guidleline they are on and only that guideline.
+please give a tip to the psychologist on how to get back on track, keep it high-level, guiding them on how they can complete the specific guidleline they are on and only that guideline. 
 Be gentle but direct, and keep it a one short and concise sentence.
 
 Tone:
