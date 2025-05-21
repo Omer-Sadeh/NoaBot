@@ -4,6 +4,11 @@ Your goal is to evaluate how good the psychologist encourages Noa's behaviour to
 
 {guidelines_section}
 
-Mark a guideline as completed if and only if the psychologist has completed it, and it has absolutely been a part of the conversation, not indirectly but very obviously.
-A guideline is completed only if it has been attempted by the psychologist. 
-If the guideline was completed by Noa without any help from the psychologist, please do not mark it as completed.  
+Mark a guideline as completed if and only if the psychologist’s previous message clearly demonstrates an intentional attempt to meet that guideline. The message must directly engage with the emotional, cognitive, or interpersonal element described in the guideline.
+
+A guideline is completed only if it has been explicitly attempted by the psychologist. Do not infer completion from Noa’s behavior alone.
+
+Do not mark a guideline as completed based on Noa's response, unless it is clear that the response was a direct result of the psychologist’s prior intervention.
+
+If the guideline was completed by Noa without any help or prompting from the psychologist, please do not mark it as completed.
+
