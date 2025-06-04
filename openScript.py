@@ -548,17 +548,26 @@ def render_screen():
             with st.chat_message("assistant"):
                 response = st.write_stream(stream)
             st.session_state.messages.append({"role": "assistant", "content": response})
+
+            # Start LLM calculations in parallel with audio playback
+            guidelines_promise = start_promise(evaluate_guidelines, st.session_state.to_dict())
+            tip_promise = start_promise(get_director_tip, st.session_state.to_dict())
+
             if st.session_state.voice:
                 with st.spinner(tr("generating_audio_spinner", current_lang)):
                     audio_file = text_to_speech(response)
                     if audio_file:
                         autoplay_audio(audio_file)
+                        # Heuristic: estimate audio duration and wait before sidebar update/rerun
+                        def estimate_audio_duration(text, wps=2.5, buffer=0.5):
+                            words = len(text.split())
+                            return words / wps + buffer
+                        duration = estimate_audio_duration(response)
+                        time.sleep(duration)
                     else: # Handle case where text_to_speech might return None
                         st.warning(tr("audio_generation_error", current_lang, error="Failed to generate audio file path."))
 
-            guidelines_promise = start_promise(evaluate_guidelines, st.session_state.to_dict())
-            tip_promise = start_promise(get_director_tip, st.session_state.to_dict())
-            
+            # Now get the results (should be ready or almost ready)
             completed_guidelines_list, new_state_dict_from_eval = guidelines_promise.result() 
             tip_text = tip_promise.result()
 
