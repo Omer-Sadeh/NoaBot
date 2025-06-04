@@ -1,0 +1,56 @@
+[
+    {
+        "stage": 1,
+        "Noa": "Honestly, I was really upset with Dana last night. We planned to meet for coffee after not seeing each other for a long time. It's already hard for me to make plans and leave the house these days. Half an hour before we were supposed to meet, after I was already ready to go out, she texted me that she's really sorry but she can't make it—her husband was at work or something and she had to watch the kids. Whatever, this is already the third time she's done this to me. I really don't know what to think...",
+        "correct_answer": "It's really unpleasant, but remember that conflict is a part of every relationship we have. How do you usually behave in situations like this?",
+        "correct_answer_feedback": "This response emphasizes that conflict is an inseparable part of any interpersonal relationship and checks how Noa tends to handle such situations.",
+        "incorrect_answer_1": "Sounds rough, especially at the last minute... What did you end up doing? Filler: I stayed home, was bummed out.",
+        "incorrect_answer_1_feedback": "This response shows interest in Noa's experience but doesn't focus on the conflict with Dana as part of developing the skill of healthy conflict management.",
+        "incorrect_answer_2": "Let's try to see this situation from Dana's perspective. Maybe she didn't mean to hurt you?",
+        "incorrect_answer_2_feedback": "This response focuses on Noa's ability to understand Dana's point of view instead of helping her develop the ability to handle conflict adaptively."
+    },
+    {
+        "stage": 2,
+        "Noa": "It's hard for me in these situations with friends, when friends bail on me. I didn't tell her that, you know how it is... I just acted like everything was fine, but that's really not how I felt.",
+        "correct_answer": "Suppose you did say something to her, what would you want to say? What's your goal in talking to her?",
+        "correct_answer_feedback": "This response guides Noa to understand her own side and her goal in a potential conversation with Dana as part of developing the ability to manage conflict in a healthy way.",
+        "incorrect_answer_1": "From what you're saying, it sounds like you tend to give up your needs and desires in friendships.",
+        "incorrect_answer_1_feedback": "This response reflects Noa's interpersonal patterns but doesn't help her develop the skill of healthy conflict management.",
+        "incorrect_answer_2": "What do you think makes you react this way in such situations?",
+        "incorrect_answer_2_feedback": "This response addresses understanding the reasons for Noa's behavior in these situations rather than the ability to manage conflict in a healthy way."
+    },
+    {
+        "stage": 3,
+        "Noa": "I'd like her to just not do it again, or if she does, to understand that it's upsetting and take responsibility. I don't want to fight with her, that's why I didn't say anything, but if we did have a conversation, I'd want to tell her my side, how I feel, and ask that it doesn't happen again like that, but with more sensitivity to how it made me feel when she canceled at the last minute.",
+        "correct_answer": "It's challenging for you, but it's important to say how you felt and what you expect. Let's practice—how could you say that to her?",
+        "correct_answer_feedback": "This response encourages real practice where Noa can express her feelings and concrete expectations to Dana as part of managing the conflict.",
+        "incorrect_answer_1": "As upsetting as it is, she might not be able to promise it won't happen again. Let's think about who in your life could help you deal with such a situation?",
+        "incorrect_answer_1_feedback": "This response encourages Noa to seek help and support from her surroundings instead of focusing on developing her ability to manage the conflict she describes.",
+        "incorrect_answer_2": "Maybe right now it's less suitable for you to get into conflicts, and it's better to distance yourself from people and situations that lead you to such situations.",
+        "incorrect_answer_2_feedback": "This response encourages Noa to avoid people and situations that are difficult for her instead of helping her develop the skill of adaptive conflict management."
+    },
+    {
+        "stage": 4,
+        "Noa": "I could say to her—'Listen Dana, what happened yesterday really upset me. We haven't met in a long time, and it's not the first time this has happened, that you cancel on me at the last minute without sensitivity to how it affects me. I was already about to leave, and it felt like you really didn't see how much it bummed me out.'",
+        "correct_answer": "Suppose she answers—'I'm under a lot of pressure these days and it really wasn't under my control.' What would you say?",
+        "correct_answer_feedback": "This response presents a possible reply from Dana and invites Noa to continue practicing her ability to handle conflict adaptively.",
+        "incorrect_answer_1": "How has your friendship been lately? Maybe this relationship means something different now than it did in the past?",
+        "incorrect_answer_1_feedback": "This response tries to understand more about the interpersonal relationship between Noa and Dana and doesn't help her develop the skill of healthy conflict management.",
+        "incorrect_answer_2": "I'm curious how she'll react. You said you usually don't tell Dana directly how you feel.",
+        "incorrect_answer_2_feedback": "This response expresses curiosity about Dana's reaction without helping Noa actually practice a possible dialogue between them."
+    },
+    {
+        "stage": 5,
+        "Noa": "It would be reassuring to hear that it's not about me, but that she's really busy. Maybe I could just ask her to try to let me know in advance, or if she knows there's a chance she'll have to cancel at the last minute, to prepare me ahead of time. And if it's not known in advance, just to be more sensitive and take responsibility.",
+        "correct_answer": "Your suggestion sounds like a good compromise you could offer for next time.",
+        "correct_answer_feedback": "This response encourages Noa to find a compromise and negotiate with Dana as part of strengthening her ability to handle conflict optimally.",
+        "incorrect_answer_1": "The most important thing is that you said how you feel, now it's really in Dana's hands.",
+        "incorrect_answer_1_feedback": "This response emphasizes Noa's lack of control over Dana's reaction and doesn't address the possibility of finding a compromise as part of the conflict management process.",
+        "incorrect_answer_2": "How do you think you'll react if what you say to Dana doesn't help? Filler: I don't know.",
+        "incorrect_answer_2_feedback": "This response tries to understand how Noa will react if the conversation doesn't go as planned and doesn't address the process of healthy conflict management."
+    },
+    {
+        "stage": 6,
+        "Noa": "I hope it helps. My friendship with Dana is important to me. I don't really like these kinds of conflict situations, but I guess sometimes they're really unavoidable..."
+    }
+]

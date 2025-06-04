@@ -31,5 +31,7 @@
     "initial_message_prompt_file": "initial_message.txt",
     "system_prompt_file": "system_prompt_noa.txt",
     "evaluate_guidelines_prompt_file": "evaluate_guidelines_system.txt",
-    "get_director_tip_prompt_file": "get_director_tip_system.txt"
+    "get_director_tip_prompt_file": "get_director_tip_system.txt",
+    "continue_button": "Continue",
+    "try_again_button": "Try Again"
 } 
