@@ -33,5 +33,6 @@
     "evaluate_guidelines_prompt_file": "evaluate_guidelines_system.txt",
     "get_director_tip_prompt_file": "get_director_tip_system.txt",
     "continue_button": "המשך",
-    "try_again_button": "נסה שוב"
+    "try_again_button": "נסה שוב",
+    "closed_stats_message": "ענית נכון על {correct} מתוך {total}."
 } 

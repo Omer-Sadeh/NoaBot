@@ -61,6 +61,8 @@ def setup_env_closed():
         st.session_state.closed_feedback_color = None
     if "closed_answered" not in st.session_state:
         st.session_state.closed_answered = False
+    if "closed_correct_count" not in st.session_state:
+        st.session_state.closed_correct_count = 0
     if "translations" not in st.session_state or st.session_state.get("translations_lang") != st.session_state.language:
         tr("app_title", st.session_state.language)
 
@@ -70,6 +72,7 @@ def set_language_closed(lang):
     st.session_state.closed_feedback = None
     st.session_state.closed_feedback_color = None
     st.session_state.closed_answered = False
+    st.session_state.closed_correct_count = 0
     st.query_params["language"] = lang
     st.rerun()
 
@@ -109,13 +112,19 @@ def render_closed_screen():
     script = load_closed_script(current_lang)
     stage = st.session_state.get("closed_stage", 0)
     if stage >= len(script):
+        total = len(script)
+        correct = st.session_state.get("closed_correct_count", 0)
         st.success(tr("thank_you_message", current_lang))
+        st.info(tr("closed_stats_message", current_lang, correct=correct, total=total))
         return
     entry = script[stage]
     st.header("Noa:")
     st.write(entry["Noa"])
     if stage == len(script) - 1:
+        total = len(script)
+        correct = st.session_state.get("closed_correct_count", 0)
         st.success(tr("thank_you_message", current_lang))
+        st.info(tr("closed_stats_message", current_lang, correct=correct, total=total))
         return
     answers = [
         (entry["correct_answer"], "correct", entry["correct_answer_feedback"]),
@@ -133,6 +142,9 @@ def render_closed_screen():
                 st.session_state.closed_answered = True
                 st.session_state.closed_selected_idx = idx
                 st.session_state.closed_correct_idx = [i for i, (_, k, _) in enumerate(answers) if k == "correct"][0]
+                # Track correct answers
+                if key == "correct":
+                    st.session_state.closed_correct_count = st.session_state.get("closed_correct_count", 0) + 1
                 st.rerun()
     else:
         # Show all answers, marking the correct one in green, selected in red if incorrect

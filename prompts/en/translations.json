@@ -33,5 +33,6 @@
     "evaluate_guidelines_prompt_file": "evaluate_guidelines_system.txt",
     "get_director_tip_prompt_file": "get_director_tip_system.txt",
     "continue_button": "Continue",
-    "try_again_button": "Try Again"
+    "try_again_button": "Try Again",
+    "closed_stats_message": "You answered {correct} out of {total} correctly."
 } 
