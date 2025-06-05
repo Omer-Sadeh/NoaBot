@@ -619,8 +619,8 @@ def render_end_screen():
     else:
         st.error(tr("not_all_guidelines_completed_error", current_lang))
 
-    elapsed_time = st.session_state.end_time - st.session_state.start_time
-    minutes = int(elapsed_time / 60)
+    elapsed_time = (st.session_state.end_time or 0) - (st.session_state.start_time or 0)
+    minutes = int(elapsed_time // 60)
     seconds = int(elapsed_time % 60)
     duration_str = f"{minutes} {tr('minutes_unit', current_lang)} {seconds} {tr('seconds_unit', current_lang)}"
     st.write(tr("conversation_duration_label", current_lang, duration=duration_str))
@@ -628,12 +628,13 @@ def render_end_screen():
     user_msgs = len([msg for msg in st.session_state.messages if msg['role'] == 'user'])
     st.write(tr("user_messages_label", current_lang, count=user_msgs))
 
-    st.write(tr("completed_steps_label", current_lang, count=st.session_state.current_stage))
+    total_criteria = 6
+    completed_criteria_str = f"{st.session_state.completed_guidelines}/{total_criteria}"
+    st.write(tr("completed_criteria_label", current_lang, count=completed_criteria_str))
 
-    st.write(tr("completed_criteria_label", current_lang, count=st.session_state.completed_guidelines))
-
-    steps_times_minutes = [int(t / 60) for t in st.session_state.step_times] # Keep as numbers for format
-    st.write(tr("time_on_each_step_label", current_lang, times=steps_times_minutes))
+    steps_times = st.session_state.step_times if hasattr(st.session_state, 'step_times') else []
+    steps_times_str = [f"{int(t // 60)}:{int(t % 60):02d}" for t in steps_times]
+    st.write(tr("time_on_each_step_label", current_lang, times=steps_times_str))
 
     st.write(tr("tips_shown_label", current_lang, count=st.session_state.tips_shown))
 
@@ -648,15 +649,13 @@ def render_end_screen():
 Completed: {st.session_state.done}\n\
 Session Duration: {duration_str}\n\
 Number of user messages: {user_msgs}\n\
-Number of completed Steps: {st.session_state.current_stage}\n\
-Number of Completed Criteria: {st.session_state.completed_guidelines}\n\
-Time on Each Step (min): {steps_times_minutes}\n\
+Number of Completed Criteria: {completed_criteria_str}\n\
+Time on Each Step (min:sec): {steps_times_str}\n\
 Number of tips shown: {st.session_state.tips_shown}\n\
 Conversation Transcript: \n\
 --------------------------\n\n\
 {conv_transcript}\n\n\
---------------------------
-"""
+--------------------------\n"""
 
     st.download_button(
         tr("save_results_button", current_lang),
