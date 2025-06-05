@@ -128,29 +128,32 @@ def render_closed_screen():
     if not st.session_state.get("closed_answered", False):
         for idx, (ans, key, feedback) in enumerate(answers):
             if st.button(ans, key=f"ans_{stage}_{idx}"):
-                if key == "correct":
-                    st.session_state.closed_feedback = feedback
-                    st.session_state.closed_feedback_color = "green"
-                    st.session_state.closed_answered = True
-                else:
-                    st.session_state.closed_feedback = feedback
-                    st.session_state.closed_feedback_color = "red"
-                    st.session_state.closed_answered = True
+                st.session_state.closed_selected_key = key
+                st.session_state.closed_feedback = feedback
+                st.session_state.closed_answered = True
+                st.session_state.closed_selected_idx = idx
+                st.session_state.closed_correct_idx = [i for i, (_, k, _) in enumerate(answers) if k == "correct"][0]
                 st.rerun()
     else:
-        if st.session_state.closed_feedback:
-            if st.session_state.closed_feedback_color == "green":
-                st.success(st.session_state.closed_feedback)
-                if st.button(tr("continue_button", current_lang), key=f"cont_{stage}"):
-                    st.session_state.closed_stage += 1
-                    st.session_state.closed_feedback = None
-                    st.session_state.closed_feedback_color = None
-                    st.session_state.closed_answered = False
-                    st.rerun()
+        # Show all answers, marking the correct one in green, selected in red if incorrect
+        selected_idx = st.session_state.get("closed_selected_idx")
+        correct_idx = st.session_state.get("closed_correct_idx")
+        for idx, (ans, key, feedback) in enumerate(answers):
+            if idx == correct_idx:
+                st.markdown(f'<div style="background-color:#000000;border:1px solid #34a853;padding:8px;border-radius:8px;margin-bottom:4px;">{ans}</div>', unsafe_allow_html=True)
+            elif idx == selected_idx:
+                st.markdown(f'<div style="background-color:#000000;border:1px solid #ea4335;padding:8px;border-radius:8px;margin-bottom:4px;">{ans}</div>', unsafe_allow_html=True)
             else:
-                st.error(st.session_state.closed_feedback)
-                if st.button(tr("try_again_button", current_lang), key=f"try_{stage}"):
-                    st.session_state.closed_feedback = None
-                    st.session_state.closed_feedback_color = None
-                    st.session_state.closed_answered = False
-                    st.rerun() 
+                st.markdown(f'<div style="color:gray;background-color:#000000;border:1px solid #cccccc;padding:8px;border-radius:8px;margin-bottom:4px;">{ans}</div>', unsafe_allow_html=True)
+        # Show feedback for the selected answer
+        if st.session_state.closed_feedback:
+            st.info(st.session_state.closed_feedback)
+        # Continue button
+        if st.button(tr("continue_button", current_lang), key=f"cont_{stage}"):
+            st.session_state.closed_stage += 1
+            st.session_state.closed_feedback = None
+            st.session_state.closed_answered = False
+            st.session_state.closed_selected_key = None
+            st.session_state.closed_selected_idx = None
+            st.session_state.closed_correct_idx = None
+            st.rerun() 
