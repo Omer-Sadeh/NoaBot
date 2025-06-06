@@ -6,6 +6,12 @@ from openai import OpenAI
 import json
 import concurrent.futures
 import time
+import uuid
+
+from google.oauth2 import service_account
+import json
+import firebase_admin
+from firebase_admin import firestore
 
 def load_translations(language: str = "en") -> dict:
     """Load translations from a JSON file."""
@@ -116,8 +122,13 @@ def set_page_direction(lang: str = None):
             unsafe_allow_html=True,
         )
 
+if not firebase_admin._apps:
+    cred = service_account.Credentials.from_service_account_info(json.loads(st.secrets["firestore_creds"]))
+    firebase_admin.initialize_app(cred, {'projectId': 'noabotprompts',})
+    
 client = OpenAI(api_key=st.secrets["openai_key"])
 async_context = concurrent.futures.ThreadPoolExecutor()
+db = firestore.client()
 
 def load_prompt(file_path: str, language: str = "en") -> str:
     full_path = f"prompts/{language}/{file_path}"
@@ -179,10 +190,17 @@ def reset_session():
     if "language" not in st.session_state:
         st.session_state.language = "en"
 
+    # Add a unique session_id if not already present
+    if "session_id" not in st.session_state:
+        st.session_state.session_id = str(uuid.uuid4())
+
     # Ensure translations are loaded at the start of a session
     if "translations" not in st.session_state or st.session_state.get("translations_lang") != st.session_state.language:
         st.session_state.translations = load_translations(st.session_state.language)
         st.session_state.translations_lang = st.session_state.language
+
+    # Reset session_saved flag
+    st.session_state.session_saved = False
 
 def evaluate_guidelines(state: dict):
     prompt_template = load_prompt(tr("evaluate_guidelines_prompt_file", state.get("language", "en")), state.get("language", "en"))
@@ -657,9 +675,38 @@ Conversation Transcript: \n\
 {conv_transcript}\n\n\
 --------------------------\n"""
 
+    # --- Save to Firestore ---
+    try:
+        session_id = st.session_state.get("session_id")
+        if session_id and not st.session_state.get("session_saved", False):
+            with st.spinner(tr("autosave_spinner", current_lang)):
+                # Ensure parent session document exists
+                db.collection("sessions").document(session_id).set({"created": firestore.SERVER_TIMESTAMP}, merge=True)
+                db.collection("sessions").document(session_id).collection("conversations").add({
+                    "timestamp": firestore.SERVER_TIMESTAMP,
+                    "data": save_data
+                })
+                st.session_state.session_saved = True
+    except Exception as e:
+        st.warning(f"Failed to save session to Firestore: {e}")
+
     st.download_button(
         tr("save_results_button", current_lang),
         save_data,
         file_name=f"transcript_results_{time.strftime('%Y%m%d_%H%M%S')}.txt",
         mime="text/plain"
     )
+
+    # --- Add buttons for new conversation and main menu ---
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button(tr("try_again_button", current_lang)):
+            reset_session()
+            st.rerun()
+    with col2:
+        if st.button(tr("back_to_menu_button", current_lang)):
+            session_id = st.session_state.get("session_id")
+            st.session_state.clear()
+            st.session_state.session_id = session_id
+            st.session_state.pre_done = False
+            st.rerun()

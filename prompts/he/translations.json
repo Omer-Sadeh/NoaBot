@@ -34,5 +34,7 @@
     "get_director_tip_prompt_file": "get_director_tip_system.txt",
     "continue_button": "המשך",
     "try_again_button": "נסה שוב",
-    "closed_stats_message": "ענית נכון על {correct} מתוך {total}."
+    "closed_stats_message": "ענית נכון על {correct} מתוך {total}.",
+    "back_to_menu_button": "חזרה לתפריט הראשי",
+    "autosave_spinner": "שומר את הסשן, אנא המתן..."
 } 

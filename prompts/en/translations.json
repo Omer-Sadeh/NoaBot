@@ -34,5 +34,7 @@
     "get_director_tip_prompt_file": "get_director_tip_system.txt",
     "continue_button": "Continue",
     "try_again_button": "Try Again",
-    "closed_stats_message": "You answered {correct} out of {total} correctly."
+    "closed_stats_message": "You answered {correct} out of {total} correctly.",
+    "back_to_menu_button": "Back to Main Menu",
+    "autosave_spinner": "Saving session, please wait..."
 } 
