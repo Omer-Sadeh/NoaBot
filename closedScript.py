@@ -75,6 +75,8 @@ def setup_env_closed():
         st.session_state.session_saved = False
     if "translations" not in st.session_state or st.session_state.get("translations_lang") != st.session_state.language:
         tr("app_title", st.session_state.language)
+    if "closed_user_choices" not in st.session_state:
+        st.session_state.closed_user_choices = []
 
 def set_language_closed(lang):
     st.session_state.language = lang
@@ -112,9 +114,16 @@ Closed Script Completed: True\n\
 Number of questions: {total}\n\
 Number of correct answers: {correct}\n\
 --- Transcript ---\n"""
+    user_choices = st.session_state.get("closed_user_choices", [])
     for i, entry in enumerate(script):
         noa = entry["Noa"]
-        save_data += f"\nNoa: {noa}\n"
+        user_choice = user_choices[i] if i < len(user_choices) else "(no answer)"
+        if "correct_answer" in entry:
+            correct_answer = entry["correct_answer"]
+            is_correct = "Yes" if user_choice == correct_answer else "No"
+            save_data += f"\nNoa: {noa}\nUser: {user_choice}\nCorrect: {is_correct}\n"
+        else:
+            save_data += f"\nNoa: {noa}\nUser: {user_choice}\n"
     save_data += "\n--------------------------\n"
 
     # --- Save to Firestore ---
@@ -236,6 +245,11 @@ def render_closed_screen():
                 # Track correct answers
                 if key == "correct":
                     st.session_state.closed_correct_count = st.session_state.get("closed_correct_count", 0) + 1
+                # Track user choice for transcript
+                if len(st.session_state.closed_user_choices) <= stage:
+                    st.session_state.closed_user_choices.append(ans)
+                else:
+                    st.session_state.closed_user_choices[stage] = ans
                 # If this is the last question, immediately go to end screen
                 if stage == len(script) - 1:
                     st.session_state.closed_stage += 1
