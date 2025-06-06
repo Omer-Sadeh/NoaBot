@@ -1,12 +1,12 @@
 import streamlit as st
 import json
 import os
-# Add Firestore imports
 from google.oauth2 import service_account
 import firebase_admin
 from firebase_admin import firestore
 import time
 import uuid
+from streamlit_theme import st_theme
 
 def load_closed_script(language: str = "en"):
     file_path = f"script/{language}.json"
@@ -173,6 +173,7 @@ Number of correct answers: {correct}\n\
 
 # --- Main closed screen logic ---
 def render_closed_screen():
+    theme = st_theme()
     # Sync language from query params if needed
     if "language" in st.query_params:
         if st.session_state.get("language") != st.query_params["language"]:
@@ -262,20 +263,30 @@ def render_closed_screen():
                 else:
                     st.rerun()
     else:
-        # Show all answers, marking the correct one in green, selected in red if incorrect
         selected_idx = st.session_state.get("closed_selected_idx")
         correct_idx = st.session_state.get("closed_correct_idx")
+        # Use st-theme for theme-aware colors
+        if theme and theme.get('base') == 'dark':
+            bg_color = theme.get('secondaryBackgroundColor', '#000000')
+            correct_border = '#34a853'
+            incorrect_border = '#ea4335'
+            default_border = '#cccccc'
+            default_text = 'gray'
+        else:
+            bg_color = theme.get('secondaryBackgroundColor', '#fff')
+            correct_border = '#34a853'
+            incorrect_border = '#ea4335'
+            default_border = '#cccccc'
+            default_text = 'gray'
         for idx, (ans, key, feedback) in enumerate(answers):
             if idx == correct_idx:
-                st.markdown(f'<div style="background-color:#000000;border:1px solid #34a853;padding:8px;border-radius:8px;margin-bottom:4px;">{ans}</div>', unsafe_allow_html=True)
+                st.markdown(f'<div style="background-color:{bg_color};border:1px solid {correct_border};padding:8px;border-radius:8px;margin-bottom:4px;">{ans}</div>', unsafe_allow_html=True)
             elif idx == selected_idx:
-                st.markdown(f'<div style="background-color:#000000;border:1px solid #ea4335;padding:8px;border-radius:8px;margin-bottom:4px;">{ans}</div>', unsafe_allow_html=True)
+                st.markdown(f'<div style="background-color:{bg_color};border:1px solid {incorrect_border};padding:8px;border-radius:8px;margin-bottom:4px;">{ans}</div>', unsafe_allow_html=True)
             else:
-                st.markdown(f'<div style="color:gray;background-color:#000000;border:1px solid #cccccc;padding:8px;border-radius:8px;margin-bottom:4px;">{ans}</div>', unsafe_allow_html=True)
-        # Show feedback for the selected answer
+                st.markdown(f'<div style="color:{default_text};background-color:{bg_color};border:1px solid {default_border};padding:8px;border-radius:8px;margin-bottom:4px;">{ans}</div>', unsafe_allow_html=True)
         if st.session_state.closed_feedback:
             st.info(st.session_state.closed_feedback)
-        # Continue button (only if not last question)
         if stage != len(script) - 1:
             if st.button(tr("continue_button", current_lang), key=f"cont_{stage}"):
                 st.session_state.closed_stage += 1
