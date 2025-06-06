@@ -341,8 +341,7 @@ def _mark_tip_for_removal(tip_id: str):
 
 def end_session():
     st.session_state.running = False
-    if st.session_state.end_time is None:
-        st.session_state.end_time = time.time()
+    st.session_state.end_time = time.time()
     if not st.session_state.done:
         user_messages_amount = len([msg for msg in st.session_state.messages if msg['role'] == 'user'])
         for s in st.session_state.step_user_messages_amount:
@@ -350,9 +349,8 @@ def end_session():
         st.session_state.step_user_messages_amount.append(user_messages_amount)
 
         # Calculate the last step time if session ended early
-        now = time.time()
         if st.session_state.step_start_time is not None:
-            step_time = now - st.session_state.step_start_time
+            step_time = time.time() - st.session_state.step_start_time
         else:
             step_time = 0
         st.session_state.step_times.append(step_time)
