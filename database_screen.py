@@ -55,9 +55,9 @@ def render_database_screen():
                 ts_str = str(ts)
         else:
             ts_str = "No timestamp"
-        st.markdown(f"**Session:** `{conv['session_id']}` | **Time:** {ts_str} | **Mode:** {conv['mode']}")
-        preview = conv["data"][:300].replace('\n', ' ')
-        st.code(preview + ("..." if len(conv["data"]) > 300 else ""), language="text")
+        label = f"Session: `{conv['session_id']}` | Time: {ts_str} | Mode: {conv['mode']}"
+        with st.expander(label):
+            st.code(conv["data"], language="text")
         st.markdown("---")
     if st.button("Back to Menu"):
         st.session_state.pre_done = False
