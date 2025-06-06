@@ -652,7 +652,7 @@ def render_end_screen():
     steps_times = st.session_state.step_times if hasattr(st.session_state, 'step_times') else []
     elapsed_times = []
     for i in range(len(steps_times)):
-        elapsed_times.append(steps_times[i] - (sum(steps_times[:i]) if i > 0 else 0))
+        elapsed_times.append(steps_times[i] - (steps_times[i-1] if i > 0 else 0))
     steps_times_str = [f"{int(t // 60)}:{int(t % 60):02d}" for t in elapsed_times]
     st.write(tr("time_on_each_step_label", current_lang, times=steps_times_str))
 
