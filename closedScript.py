@@ -12,6 +12,11 @@ import base64
 from pathlib import Path
 from openai import OpenAI
 
+if not firebase_admin._apps:
+    cred = service_account.Credentials.from_service_account_info(json.loads(st.secrets["firestore_creds"]))
+    firebase_admin.initialize_app(cred, {'projectId': 'noabotprompts',})
+client = OpenAI(api_key=st.secrets["openai_key"]) 
+
 def load_closed_script(language: str = "en"):
     file_path = f"script/{language}.json"
     if not os.path.exists(file_path):
@@ -98,10 +103,41 @@ def set_language_closed(lang):
     st.query_params["language"] = lang
     st.rerun()
 
-def recognize_option_from_text(text: str) -> int:
-    # debug
-    st.write(text)
-    return random.randint(0, 2)
+def recognize_option_from_text(text: str, options: list[str]) -> int:
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[
+            {
+                "role": "system",
+                "content": f"You are a helpful assistant that recognizes the correct option from a list of options. I will give you a text, and you will reply with the correct index of option best matching the text. The options are: {options}"
+            },
+            {
+                "role": "user",
+                "content": text
+            }
+        ],
+        response_format={
+            "type": "json_schema",
+            "json_schema": {
+                "name": "index_response",
+                "strict": True,
+                "schema": {
+                    "type": "object",
+                    "properties": {
+                        "index": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": len(options) - 1
+                        },
+                    },
+                    "required": ["index"],
+                    "additionalProperties": False
+                }
+            }
+        }
+    )
+    response = response.choices[0].message.content
+    return json.loads(response)["index"] if json.loads(response)["index"] is not None else random.randint(0, len(options) - 1)
 
 def render_closed_end_screen():
     current_lang = st.session_state.get("language", "en")
@@ -326,7 +362,7 @@ def render_closed_screen():
                         language=current_lang
                     ).text
                     # Recognize which option was said
-                    idx = recognize_option_from_text(transcript)
+                    idx = recognize_option_from_text(transcript, [ans for ans, _, _ in answers])
                     if idx < 0 or idx > 2:
                         st.warning(tr("transcription_error", current_lang, error="Could not recognize a valid option from your speech."))
                         st.session_state.input_locked = False
@@ -426,8 +462,3 @@ def autoplay_audio(file_path):
         </audio>
     """
     st.markdown(md_html, unsafe_allow_html=True)
-
-if not firebase_admin._apps:
-    cred = service_account.Credentials.from_service_account_info(json.loads(st.secrets["firestore_creds"]))
-    firebase_admin.initialize_app(cred, {'projectId': 'noabotprompts',})
-client = OpenAI(api_key=st.secrets["openai_key"]) 
