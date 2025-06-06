@@ -680,6 +680,8 @@ Conversation Transcript: \n\
         session_id = st.session_state.get("session_id")
         if session_id and not st.session_state.get("session_saved", False):
             with st.spinner(tr("autosave_spinner", current_lang)):
+                # Ensure parent session document exists
+                db.collection("sessions").document(session_id).set({"created": firestore.SERVER_TIMESTAMP}, merge=True)
                 db.collection("sessions").document(session_id).collection("conversations").add({
                     "timestamp": firestore.SERVER_TIMESTAMP,
                     "data": save_data
