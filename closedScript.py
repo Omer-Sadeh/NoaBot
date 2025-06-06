@@ -1,3 +1,4 @@
+import random
 import streamlit as st
 import json
 import os
@@ -7,6 +8,14 @@ from firebase_admin import firestore
 import time
 import uuid
 from streamlit_theme import st_theme
+import base64
+from pathlib import Path
+from openai import OpenAI
+
+if not firebase_admin._apps:
+    cred = service_account.Credentials.from_service_account_info(json.loads(st.secrets["firestore_creds"]))
+    firebase_admin.initialize_app(cred, {'projectId': 'noabotprompts',})
+client = OpenAI(api_key=st.secrets["openai_key"]) 
 
 def load_closed_script(language: str = "en"):
     file_path = f"script/{language}.json"
@@ -77,6 +86,12 @@ def setup_env_closed():
         tr("app_title", st.session_state.language)
     if "closed_user_choices" not in st.session_state:
         st.session_state.closed_user_choices = []
+    if "voice" not in st.session_state:
+        st.session_state.voice = False
+    if "input_locked" not in st.session_state:
+        st.session_state.input_locked = False
+    if "audio_played_stage" not in st.session_state:
+        st.session_state.audio_played_stage = -1
 
 def set_language_closed(lang):
     st.session_state.language = lang
@@ -88,7 +103,42 @@ def set_language_closed(lang):
     st.query_params["language"] = lang
     st.rerun()
 
-# --- New persistent end screen for closed script ---
+def recognize_option_from_text(text: str, options: list[str]) -> int:
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[
+            {
+                "role": "system",
+                "content": f"You are a helpful assistant that recognizes the correct option from a list of options. I will give you a text, and you will reply with the correct index of option best matching the text. The options are: {options}"
+            },
+            {
+                "role": "user",
+                "content": text
+            }
+        ],
+        response_format={
+            "type": "json_schema",
+            "json_schema": {
+                "name": "index_response",
+                "strict": True,
+                "schema": {
+                    "type": "object",
+                    "properties": {
+                        "index": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": len(options) - 1
+                        },
+                    },
+                    "required": ["index"],
+                    "additionalProperties": False
+                }
+            }
+        }
+    )
+    response = response.choices[0].message.content
+    return json.loads(response)["index"] if json.loads(response)["index"] is not None else random.randint(0, len(options) - 1)
+
 def render_closed_end_screen():
     current_lang = st.session_state.get("language", "en")
     set_page_direction(current_lang)
@@ -171,7 +221,6 @@ Number of correct answers: {correct}\n\
             st.session_state.pre_done = False
             st.rerun()
 
-# --- Main closed screen logic ---
 def render_closed_screen():
     theme = st_theme()
     # Sync language from query params if needed
@@ -185,6 +234,14 @@ def render_closed_screen():
     if stage >= len(script):
         render_closed_end_screen()
         return
+    # Add sound voice checkbox
+    st.checkbox(tr("sound_voice_checkbox", current_lang), value=st.session_state.voice, on_change=lambda: st.session_state.update({"voice": not st.session_state.voice}))
+    # After rerun, recalculate current_lang and script
+    current_lang = st.session_state.get("language", "en")
+    script = load_closed_script(current_lang)
+    stage = st.session_state.get("closed_stage", 0)
+    entry = script[stage]
+    # --- UI rendering starts here ---
     st.title(tr("app_title", current_lang))
     st.write(tr("app_subtitle", current_lang))
     lang_options = {"English": "en", "עברית": "he"}
@@ -207,13 +264,30 @@ def render_closed_screen():
     if lang_options[selected_lang_key] != current_lang:
         set_language_closed(lang_options[selected_lang_key])
         st.stop()
-    # After rerun, recalculate current_lang and script
-    current_lang = st.session_state.get("language", "en")
-    script = load_closed_script(current_lang)
-    stage = st.session_state.get("closed_stage", 0)
     entry = script[stage]
     st.header("Noa:")
     st.write(entry["Noa"])
+    # --- Audio logic (AFTER Noa's text, BEFORE any button rendering) ---
+    if st.session_state.voice and not st.session_state.get("closed_answered", False):
+        if (not st.session_state.get("input_locked", False)) and st.session_state.get("audio_played_stage", -1) != stage:
+            st.session_state.input_locked = True
+            with st.spinner(tr("generating_audio_spinner", current_lang)):
+                audio_file = text_to_speech(entry["Noa"])
+                if audio_file:
+                    autoplay_audio(audio_file)
+                    def estimate_audio_duration(text, wps=2.5, buffer=0.5):
+                        words = len(text.split())
+                        return words / wps + buffer
+                    duration = estimate_audio_duration(entry["Noa"])
+                    time.sleep(duration)
+                else:
+                    st.warning(tr("audio_generation_error", current_lang, error="Failed to generate audio file path."))
+            st.session_state.input_locked = False
+            st.session_state.audio_played_stage = stage
+            st.rerun()
+        if st.session_state.get("input_locked", False):
+            return  # Don't show any buttons while audio is playing
+
     # Only show thank you/stats/continue if on last question and NOT answered yet
     if stage == len(script) - 1 and not st.session_state.get("closed_answered", False):
         st.success(tr("thank_you_message", current_lang))
@@ -225,6 +299,7 @@ def render_closed_screen():
             st.session_state.closed_selected_key = None
             st.session_state.closed_selected_idx = None
             st.session_state.closed_correct_idx = None
+            st.session_state.audio_played_stage = -1
             st.rerun()
         return
     answers = [
@@ -235,32 +310,95 @@ def render_closed_screen():
     import random
     random.seed(stage)
     random.shuffle(answers)
+    # --- AUDIO OPTION LOGIC ---
+    if "audio_iteration_count" not in st.session_state:
+        st.session_state.audio_iteration_count = 0
+    audio_input_key = f"audio_data_{current_lang}_{st.session_state.audio_iteration_count}"
+    input_locked = st.session_state.get("input_locked", False)
+    audio_bytes = None
+    audio_option_label = tr("audio_input_label", current_lang)
+    # Only allow answering if not already answered
     if not st.session_state.get("closed_answered", False):
+        cols = st.columns(4)
+        # Render the three answer buttons
         for idx, (ans, key, feedback) in enumerate(answers):
-            if st.button(ans, key=f"ans_{stage}_{idx}"):
-                st.session_state.closed_selected_key = key
-                st.session_state.closed_feedback = feedback
-                st.session_state.closed_answered = True
-                st.session_state.closed_selected_idx = idx
-                st.session_state.closed_correct_idx = [i for i, (_, k, _) in enumerate(answers) if k == "correct"][0]
-                # Track correct answers
-                if key == "correct":
-                    st.session_state.closed_correct_count = st.session_state.get("closed_correct_count", 0) + 1
-                # Track user choice for transcript
-                if len(st.session_state.closed_user_choices) <= stage:
-                    st.session_state.closed_user_choices.append(ans)
-                else:
-                    st.session_state.closed_user_choices[stage] = ans
-                # If this is the last question, immediately go to end screen
-                if stage == len(script) - 1:
-                    st.session_state.closed_stage += 1
-                    st.session_state.closed_feedback = None
-                    st.session_state.closed_answered = False
-                    st.session_state.closed_selected_key = None
-                    st.session_state.closed_selected_idx = None
-                    st.session_state.closed_correct_idx = None
-                    st.rerun()
-                else:
+            with cols[idx]:
+                if st.button(ans, key=f"ans_{stage}_{idx}"):
+                    st.session_state.closed_selected_key = key
+                    st.session_state.closed_feedback = feedback
+                    st.session_state.closed_answered = True
+                    st.session_state.closed_selected_idx = idx
+                    st.session_state.closed_correct_idx = [i for i, (_, k, _) in enumerate(answers) if k == "correct"][0]
+                    if key == "correct":
+                        st.session_state.closed_correct_count = st.session_state.get("closed_correct_count", 0) + 1
+                    if len(st.session_state.closed_user_choices) <= stage:
+                        st.session_state.closed_user_choices.append(ans)
+                    else:
+                        st.session_state.closed_user_choices[stage] = ans
+                    if stage == len(script) - 1:
+                        st.session_state.closed_stage += 1
+                        st.session_state.closed_feedback = None
+                        st.session_state.closed_answered = False
+                        st.session_state.closed_selected_key = None
+                        st.session_state.closed_selected_idx = None
+                        st.session_state.closed_correct_idx = None
+                        st.session_state.audio_played_stage = -1
+                        st.rerun()
+                    else:
+                        st.session_state.audio_played_stage = -1
+                        st.rerun()
+        # Render the audio input as the fourth option
+        with cols[3]:
+            audio_bytes = st.audio_input(audio_option_label, key=audio_input_key, disabled=input_locked)
+        # Handle audio input
+        if audio_bytes:
+            st.session_state.input_locked = True
+            with st.spinner(tr("processing_speech_spinner", current_lang)):
+                try:
+                    audio_file_for_transcription = ("audio.wav", audio_bytes, "audio/wav")
+                    transcript = client.audio.transcriptions.create(
+                        model="gpt-4o-transcribe",
+                        file=audio_file_for_transcription,
+                        language=current_lang
+                    ).text
+                    # Recognize which option was said
+                    idx = recognize_option_from_text(transcript, [ans for ans, _, _ in answers])
+                    if idx < 0 or idx > 2:
+                        st.warning(tr("transcription_error", current_lang, error="Could not recognize a valid option from your speech."))
+                        st.session_state.input_locked = False
+                        st.session_state.audio_iteration_count += 1
+                        st.rerun()
+                    else:
+                        ans, key, feedback = answers[idx]
+                        st.session_state.closed_selected_key = key
+                        st.session_state.closed_feedback = feedback
+                        st.session_state.closed_answered = True
+                        st.session_state.closed_selected_idx = idx
+                        st.session_state.closed_correct_idx = [i for i, (_, k, _) in enumerate(answers) if k == "correct"][0]
+                        if key == "correct":
+                            st.session_state.closed_correct_count = st.session_state.get("closed_correct_count", 0) + 1
+                        if len(st.session_state.closed_user_choices) <= stage:
+                            st.session_state.closed_user_choices.append(ans)
+                        else:
+                            st.session_state.closed_user_choices[stage] = ans
+                        st.session_state.input_locked = False
+                        st.session_state.audio_iteration_count += 1
+                        if stage == len(script) - 1:
+                            st.session_state.closed_stage += 1
+                            st.session_state.closed_feedback = None
+                            st.session_state.closed_answered = False
+                            st.session_state.closed_selected_key = None
+                            st.session_state.closed_selected_idx = None
+                            st.session_state.closed_correct_idx = None
+                            st.session_state.audio_played_stage = -1
+                            st.rerun()
+                        else:
+                            st.session_state.audio_played_stage = -1
+                            st.rerun()
+                except Exception as e:
+                    st.error(tr("transcription_error", current_lang, error=str(e)))
+                    st.session_state.input_locked = False
+                    st.session_state.audio_iteration_count += 1
                     st.rerun()
     else:
         selected_idx = st.session_state.get("closed_selected_idx")
@@ -295,4 +433,32 @@ def render_closed_screen():
                 st.session_state.closed_selected_key = None
                 st.session_state.closed_selected_idx = None
                 st.session_state.closed_correct_idx = None
-                st.rerun() 
+                st.session_state.audio_played_stage = -1
+                st.rerun()
+
+def text_to_speech(input_text):
+    temp_dir = Path("temp_audio")
+    temp_dir.mkdir(exist_ok=True)
+    output_path = temp_dir / "speech.mp3"
+    try:
+        with client.audio.speech.with_streaming_response.create(
+                model="gpt-4o-mini-tts",
+                voice="coral",
+                input=input_text
+        ) as response:
+            response.stream_to_file(output_path)
+        return output_path
+    except Exception as e:
+        st.error(tr("audio_generation_error", st.session_state.get("language", "en"), error=str(e)))
+        return None
+
+def autoplay_audio(file_path):
+    with open(file_path, "rb") as f:
+        audio_bytes = f.read()
+    audio_base64 = base64.b64encode(audio_bytes).decode()
+    md_html = f"""
+        <audio autoplay>
+        <source src="data:audio/mp3;base64,{audio_base64}" type="audio/mp3">
+        </audio>
+    """
+    st.markdown(md_html, unsafe_allow_html=True)
