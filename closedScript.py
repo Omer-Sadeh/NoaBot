@@ -7,6 +7,9 @@ from firebase_admin import firestore
 import time
 import uuid
 from streamlit_theme import st_theme
+import base64
+from pathlib import Path
+from openai import OpenAI
 
 def load_closed_script(language: str = "en"):
     file_path = f"script/{language}.json"
@@ -77,6 +80,12 @@ def setup_env_closed():
         tr("app_title", st.session_state.language)
     if "closed_user_choices" not in st.session_state:
         st.session_state.closed_user_choices = []
+    if "voice" not in st.session_state:
+        st.session_state.voice = False
+    if "input_locked" not in st.session_state:
+        st.session_state.input_locked = False
+    if "audio_played_stage" not in st.session_state:
+        st.session_state.audio_played_stage = -1
 
 def set_language_closed(lang):
     st.session_state.language = lang
@@ -185,6 +194,14 @@ def render_closed_screen():
     if stage >= len(script):
         render_closed_end_screen()
         return
+    # Add sound voice checkbox
+    st.checkbox(tr("sound_voice_checkbox", current_lang), value=st.session_state.voice, on_change=lambda: st.session_state.update({"voice": not st.session_state.voice}))
+    # After rerun, recalculate current_lang and script
+    current_lang = st.session_state.get("language", "en")
+    script = load_closed_script(current_lang)
+    stage = st.session_state.get("closed_stage", 0)
+    entry = script[stage]
+    # --- UI rendering starts here ---
     st.title(tr("app_title", current_lang))
     st.write(tr("app_subtitle", current_lang))
     lang_options = {"English": "en", "עברית": "he"}
@@ -207,13 +224,30 @@ def render_closed_screen():
     if lang_options[selected_lang_key] != current_lang:
         set_language_closed(lang_options[selected_lang_key])
         st.stop()
-    # After rerun, recalculate current_lang and script
-    current_lang = st.session_state.get("language", "en")
-    script = load_closed_script(current_lang)
-    stage = st.session_state.get("closed_stage", 0)
     entry = script[stage]
     st.header("Noa:")
     st.write(entry["Noa"])
+    # --- Audio logic (AFTER Noa's text, BEFORE any button rendering) ---
+    if st.session_state.voice and not st.session_state.get("closed_answered", False):
+        if (not st.session_state.get("input_locked", False)) and st.session_state.get("audio_played_stage", -1) != stage:
+            st.session_state.input_locked = True
+            with st.spinner(tr("generating_audio_spinner", current_lang)):
+                audio_file = text_to_speech(entry["Noa"])
+                if audio_file:
+                    autoplay_audio(audio_file)
+                    def estimate_audio_duration(text, wps=2.5, buffer=0.5):
+                        words = len(text.split())
+                        return words / wps + buffer
+                    duration = estimate_audio_duration(entry["Noa"])
+                    time.sleep(duration)
+                else:
+                    st.warning(tr("audio_generation_error", current_lang, error="Failed to generate audio file path."))
+            st.session_state.input_locked = False
+            st.session_state.audio_played_stage = stage
+            st.rerun()
+        if st.session_state.get("input_locked", False):
+            return  # Don't show any buttons while audio is playing
+
     # Only show thank you/stats/continue if on last question and NOT answered yet
     if stage == len(script) - 1 and not st.session_state.get("closed_answered", False):
         st.success(tr("thank_you_message", current_lang))
@@ -225,6 +259,7 @@ def render_closed_screen():
             st.session_state.closed_selected_key = None
             st.session_state.closed_selected_idx = None
             st.session_state.closed_correct_idx = None
+            st.session_state.audio_played_stage = -1
             st.rerun()
         return
     answers = [
@@ -259,8 +294,10 @@ def render_closed_screen():
                     st.session_state.closed_selected_key = None
                     st.session_state.closed_selected_idx = None
                     st.session_state.closed_correct_idx = None
+                    st.session_state.audio_played_stage = -1
                     st.rerun()
                 else:
+                    st.session_state.audio_played_stage = -1
                     st.rerun()
     else:
         selected_idx = st.session_state.get("closed_selected_idx")
@@ -295,4 +332,39 @@ def render_closed_screen():
                 st.session_state.closed_selected_key = None
                 st.session_state.closed_selected_idx = None
                 st.session_state.closed_correct_idx = None
-                st.rerun() 
+                st.session_state.audio_played_stage = -1
+                st.rerun()
+
+# --- Audio functions (copied from openScript.py) ---
+def text_to_speech(input_text):
+    temp_dir = Path("temp_audio")
+    temp_dir.mkdir(exist_ok=True)
+    output_path = temp_dir / "speech.mp3"
+    try:
+        with client.audio.speech.with_streaming_response.create(
+                model="gpt-4o-mini-tts",
+                voice="coral",
+                input=input_text
+        ) as response:
+            response.stream_to_file(output_path)
+        return output_path
+    except Exception as e:
+        st.error(tr("audio_generation_error", st.session_state.get("language", "en"), error=str(e)))
+        return None
+
+def autoplay_audio(file_path):
+    with open(file_path, "rb") as f:
+        audio_bytes = f.read()
+    audio_base64 = base64.b64encode(audio_bytes).decode()
+    md_html = f"""
+        <audio autoplay>
+        <source src="data:audio/mp3;base64,{audio_base64}" type="audio/mp3">
+        </audio>
+    """
+    st.markdown(md_html, unsafe_allow_html=True)
+
+# --- OpenAI client initialization (copied from openScript.py) ---
+if not firebase_admin._apps:
+    cred = service_account.Credentials.from_service_account_info(json.loads(st.secrets["firestore_creds"]))
+    firebase_admin.initialize_app(cred, {'projectId': 'noabotprompts',})
+client = OpenAI(api_key=st.secrets["openai_key"]) 
