@@ -501,23 +501,24 @@ def render_screen():
     with input_container:
         col1, col2 = st.columns([3, 1])
         with col1:
-            # Define the specific session state key for the audio input
-            # This key will now change with each successful audio submission to reset the widget
             audio_input_key = f"audio_data_{current_lang}_{st.session_state.audio_iteration_count}"
-            
-            # Chat input is disabled if there's a pending audio transcript to be processed from a previous rerun
-            chat_input_disabled = "pending_audio_transcript" in st.session_state
-            placeholder_text_key = "chat_placeholder_audio" if chat_input_disabled else "chat_placeholder_typing"
-            
+            input_locked = st.session_state.get("input_locked", False)
+            chat_input_disabled = input_locked or ("pending_audio_transcript" in st.session_state)
+            if input_locked:
+                placeholder_text_key = "chat_placeholder_processing"
+            elif "pending_audio_transcript" in st.session_state:
+                placeholder_text_key = "chat_placeholder_audio"
+            else:
+                placeholder_text_key = "chat_placeholder_typing"
             chat_input_value = st.chat_input(
                 tr(placeholder_text_key, current_lang),
                 disabled=chat_input_disabled 
             )
         with col2:
-            # audio_bytes gets the value from the audio input widget for this run
             audio_bytes = st.audio_input(
                 tr("audio_input_label", current_lang),
-                key=audio_input_key # Dynamic key
+                key=audio_input_key, # Dynamic key
+                disabled=input_locked # Lock audio input as well
             )
 
     if len(st.session_state.messages) > 1:
@@ -554,92 +555,76 @@ def render_screen():
     elif chat_input_value: # If no audio was processed, use chat input value
         prompt_for_llm = chat_input_value
 
-    # Process the conversation and display in the conversation container
-    with conversation_container:
-        # Show existing messages
-        for message in st.session_state.messages:
-            with st.chat_message(message["role"]):
-                st.markdown(message["content"])
+    # --- Two-phase input locking logic ---
+    # Phase 1: User submits input, lock and rerun
+    if not st.session_state.get("input_locked", False) and prompt_for_llm:
+        st.session_state.input_locked = True
+        st.session_state.pending_user_input = prompt_for_llm
+        st.rerun()
 
-        # Process new input if available (now from prompt_for_llm)
-        if prompt_for_llm:
+    # Phase 2: If locked and pending input, process and unlock
+    if st.session_state.get("input_locked", False) and st.session_state.get("pending_user_input"):
+        prompt_for_llm = st.session_state.pending_user_input
+        del st.session_state.pending_user_input
+        # Process the conversation and display in the conversation container
+        with conversation_container:
+            for message in st.session_state.messages:
+                with st.chat_message(message["role"]):
+                    st.markdown(message["content"])
             st.session_state.messages.append({"role": "user", "content": prompt_for_llm})
             with st.chat_message("user"):
                 st.markdown(prompt_for_llm)
-
-            # Set start_time and step_start_time only if not already set
             if st.session_state.start_time is None:
                 st.session_state.start_time = time.time()
             if st.session_state.step_start_time is None:
                 st.session_state.step_start_time = time.time()
-
             stream = client.chat.completions.create(
                 model="gpt-4o-mini",
                 messages=[{"role": "system", "content": st.session_state.system_prompt}] + st.session_state.messages,
                 stream=True,
             )
-
             with st.chat_message("assistant"):
                 response = st.write_stream(stream)
             st.session_state.messages.append({"role": "assistant", "content": response})
-
-            # Start LLM calculations in parallel with audio playback
             guidelines_promise = start_promise(evaluate_guidelines, st.session_state.to_dict())
             tip_promise = start_promise(get_director_tip, st.session_state.to_dict())
-
             if st.session_state.voice:
                 with st.spinner(tr("generating_audio_spinner", current_lang)):
                     audio_file = text_to_speech(response)
                     if audio_file:
                         autoplay_audio(audio_file)
-                        # Heuristic: estimate audio duration and wait before sidebar update/rerun
                         def estimate_audio_duration(text, wps=2.5, buffer=0.5):
                             words = len(text.split())
                             return words / wps + buffer
                         duration = estimate_audio_duration(response)
                         time.sleep(duration)
-                    else: # Handle case where text_to_speech might return None
+                    else:
                         st.warning(tr("audio_generation_error", current_lang, error="Failed to generate audio file path."))
-
-            # Now get the results (should be ready or almost ready)
             completed_guidelines_list, new_state_dict_from_eval = guidelines_promise.result() 
             tip_text = tip_promise.result()
-
-            # Define the specific keys that evaluate_guidelines is expected to modify in the session state.
-            # These are keys related to the application's core logic, not UI widget states.
             logic_keys_managed_by_evaluate_guidelines = [
-                "guidelines",  # List of lists of guideline strings
-                "current_stage",  # Integer, index for the current stage
-                "step_times",  # List of floats/integers, time spent on each step
-                "step_user_messages_amount",  # List of integers, user messages per step
-                "done",  # Boolean, True if all stages completed
-                "running",  # Boolean, False if session ended manually or all stages done
-                "end_time",  # Float/None, timestamp of session end
-                "completed_guidelines" # Integer, count of all completed criteria
+                "guidelines", "current_stage", "step_times", "step_user_messages_amount", "done", "running", "end_time", "completed_guidelines"
             ]
-
             for key_to_update in logic_keys_managed_by_evaluate_guidelines:
                 if key_to_update in new_state_dict_from_eval:
                     st.session_state[key_to_update] = new_state_dict_from_eval[key_to_update]
-                # else:
-                    # Optional: Handle cases where an expected key is missing from new_state_dict_from_eval,
-                    # though this shouldn't happen if evaluate_guidelines is consistent.
-                    # st.warning(f"Expected key '{key_to_update}' not found in state returned by evaluate_guidelines.")
-
-            # Update rounds_since_last_completion based on completed_guidelines_list
-            if completed_guidelines_list: # Check if it's not None and not empty
+            if completed_guidelines_list:
                 st.session_state.rounds_since_last_completion = 0
             else:
                 st.session_state.rounds_since_last_completion += 1
-
             for guideline in completed_guidelines_list:
                 add_to_sidebar(tr("guideline_completed_sidebar", current_lang, guideline=guideline), message_type='guideline')
-
-            if st.session_state.rounds_since_last_completion > 0 and tip_text: # Ensure tip is not None
-                add_to_sidebar(tip_text, message_type='tip') # Tip content itself is from LLM
-
-            # Force a rerun to update the UI immediately with new chat messages and sidebar content
+            if st.session_state.rounds_since_last_completion > 0 and tip_text:
+                add_to_sidebar(tip_text, message_type='tip')
+            st.session_state.input_locked = False
             st.rerun()
+
+    # If not in phase 2, and not processing, show conversation as usual
+    if not st.session_state.get("input_locked", False) and not st.session_state.get("pending_user_input"):
+        with conversation_container:
+            for message in st.session_state.messages:
+                with st.chat_message(message["role"]):
+                    st.markdown(message["content"])
 
 def render_end_screen():
     current_lang = st.session_state.get("language", "en")

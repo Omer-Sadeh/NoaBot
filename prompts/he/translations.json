@@ -6,6 +6,7 @@
     "sound_voice_checkbox": "הפעל קול",
     "chat_placeholder_typing": "הקלד/י את הודעתך כאן...",
     "chat_placeholder_audio": "מחק/י את ההקלטה כדי לאפשר הקלדה",
+    "chat_placeholder_processing": "מעבד את ההודעה שלך...",
     "audio_input_label": "או הקלט/י את קולך...",
     "end_conversation_button": "סיים שיחה",
     "processing_speech_spinner": "מעבד את דיבורך...",

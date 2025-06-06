@@ -6,6 +6,7 @@
     "sound_voice_checkbox": "Sound voice",
     "chat_placeholder_typing": "Type your message here...",
     "chat_placeholder_audio": "Delete recorded audio to enable typing",
+    "chat_placeholder_processing": "Processing your message...",
     "audio_input_label": "Or record your voice...",
     "end_conversation_button": "End Conversation",
     "processing_speech_spinner": "Processing your speech...",
