@@ -175,9 +175,10 @@ def reset_session():
     st.session_state.done = False
     st.session_state.running = True
 
-    st.session_state.start_time = None
+    st.session_state.start_time = None  # Will be set on first user input
     st.session_state.end_time = None
     st.session_state.step_times = []
+    st.session_state.step_start_time = None  # Track the start of each step
 
     st.session_state.step_user_messages_amount = []
 
@@ -257,10 +258,17 @@ def evaluate_guidelines(state: dict):
     if len(updated_guidelines) == 0:
         state['current_stage'] += 1
 
-        step_time = time.time() - state['start_time']
-        for t in state['step_times']:
-            step_time -= t
+        now = time.time()
+        # Use step_start_time to calculate step duration
+        if 'step_start_time' in state and state['step_start_time'] is not None:
+            step_time = now - state['step_start_time']
+        else:
+            step_time = 0
+        if 'step_times' not in state:
+            state['step_times'] = []
         state['step_times'].append(step_time)
+        # Update step_start_time for the next stage
+        state['step_start_time'] = now
 
         user_messages_amount = len([msg for msg in state['messages'] if msg['role'] == 'user'])
         for s in state['step_user_messages_amount']:
@@ -333,16 +341,20 @@ def _mark_tip_for_removal(tip_id: str):
 
 def end_session():
     st.session_state.running = False
-    st.session_state.end_time = time.time()
+    if st.session_state.end_time is None:
+        st.session_state.end_time = time.time()
     if not st.session_state.done:
         user_messages_amount = len([msg for msg in st.session_state.messages if msg['role'] == 'user'])
         for s in st.session_state.step_user_messages_amount:
             user_messages_amount -= s
         st.session_state.step_user_messages_amount.append(user_messages_amount)
 
-        step_time = st.session_state.end_time - st.session_state.start_time
-        for t in st.session_state.step_times:
-            step_time -= t
+        # Calculate the last step time if session ended early
+        now = time.time()
+        if st.session_state.step_start_time is not None:
+            step_time = now - st.session_state.step_start_time
+        else:
+            step_time = 0
         st.session_state.step_times.append(step_time)
 
 def text_to_speech(input_text):
@@ -555,7 +567,11 @@ def render_screen():
             with st.chat_message("user"):
                 st.markdown(prompt_for_llm)
 
-            st.session_state.start_time = time.time()
+            # Set start_time and step_start_time only if not already set
+            if st.session_state.start_time is None:
+                st.session_state.start_time = time.time()
+            if st.session_state.step_start_time is None:
+                st.session_state.step_start_time = time.time()
 
             stream = client.chat.completions.create(
                 model="gpt-4o-mini",
@@ -651,7 +667,10 @@ def render_end_screen():
     st.write(tr("completed_criteria_label", current_lang, count=completed_criteria_str))
 
     steps_times = st.session_state.step_times if hasattr(st.session_state, 'step_times') else []
-    steps_times_str = [f"{int(t // 60)}:{int(t % 60):02d}" for t in steps_times]
+    elapsed_times = []
+    for i in range(len(steps_times)):
+        elapsed_times.append(steps_times[i] - (sum(steps_times[:i]) if i > 0 else 0))
+    steps_times_str = [f"{int(t // 60)}:{int(t % 60):02d}" for t in elapsed_times]
     st.write(tr("time_on_each_step_label", current_lang, times=steps_times_str))
 
     st.write(tr("tips_shown_label", current_lang, count=st.session_state.tips_shown))
