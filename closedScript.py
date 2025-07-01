@@ -319,37 +319,34 @@ def render_closed_screen():
     audio_option_label = tr("audio_input_label", current_lang)
     # Only allow answering if not already answered
     if not st.session_state.get("closed_answered", False):
-        cols = st.columns(4)
-        # Render the three answer buttons
+        # Render the three answer buttons, each on its own row
         for idx, (ans, key, feedback) in enumerate(answers):
-            with cols[idx]:
-                if st.button(ans, key=f"ans_{stage}_{idx}"):
-                    st.session_state.closed_selected_key = key
-                    st.session_state.closed_feedback = feedback
-                    st.session_state.closed_answered = True
-                    st.session_state.closed_selected_idx = idx
-                    st.session_state.closed_correct_idx = [i for i, (_, k, _) in enumerate(answers) if k == "correct"][0]
-                    if key == "correct":
-                        st.session_state.closed_correct_count = st.session_state.get("closed_correct_count", 0) + 1
-                    if len(st.session_state.closed_user_choices) <= stage:
-                        st.session_state.closed_user_choices.append(ans)
-                    else:
-                        st.session_state.closed_user_choices[stage] = ans
-                    if stage == len(script) - 1:
-                        st.session_state.closed_stage += 1
-                        st.session_state.closed_feedback = None
-                        st.session_state.closed_answered = False
-                        st.session_state.closed_selected_key = None
-                        st.session_state.closed_selected_idx = None
-                        st.session_state.closed_correct_idx = None
-                        st.session_state.audio_played_stage = -1
-                        st.rerun()
-                    else:
-                        st.session_state.audio_played_stage = -1
-                        st.rerun()
-        # Render the audio input as the fourth option
-        with cols[3]:
-            audio_bytes = st.audio_input(audio_option_label, key=audio_input_key, disabled=input_locked)
+            if st.button(ans, key=f"ans_{stage}_{idx}"):
+                st.session_state.closed_selected_key = key
+                st.session_state.closed_feedback = feedback
+                st.session_state.closed_answered = True
+                st.session_state.closed_selected_idx = idx
+                st.session_state.closed_correct_idx = [i for i, (_, k, _) in enumerate(answers) if k == "correct"][0]
+                if key == "correct":
+                    st.session_state.closed_correct_count = st.session_state.get("closed_correct_count", 0) + 1
+                if len(st.session_state.closed_user_choices) <= stage:
+                    st.session_state.closed_user_choices.append(ans)
+                else:
+                    st.session_state.closed_user_choices[stage] = ans
+                if stage == len(script) - 1:
+                    st.session_state.closed_stage += 1
+                    st.session_state.closed_feedback = None
+                    st.session_state.closed_answered = False
+                    st.session_state.closed_selected_key = None
+                    st.session_state.closed_selected_idx = None
+                    st.session_state.closed_correct_idx = None
+                    st.session_state.audio_played_stage = -1
+                    st.rerun()
+                else:
+                    st.session_state.audio_played_stage = -1
+                    st.rerun()
+        # Render the audio input below the answer buttons
+        audio_bytes = st.audio_input(audio_option_label, key=audio_input_key, disabled=input_locked)
         # Handle audio input
         if audio_bytes:
             st.session_state.input_locked = True
