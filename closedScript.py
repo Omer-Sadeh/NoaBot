@@ -546,6 +546,13 @@ Current Stage: {current_stage}\n\
             "correct_answers": correct
         }, merge=True)
         
+        # Delete the ongoing session document when saving completed session
+        if status == "completed":
+            try:
+                db.collection("sessions").document(session_id).collection("conversations").document("current").delete()
+            except Exception:
+                pass  # Ignore if current document doesn't exist
+        
         return True
     except Exception as e:
         st.warning(f"Failed to save closed session incrementally: {e}")
