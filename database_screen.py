@@ -27,6 +27,41 @@ def backfill_sessions(db):
             doc_ref.set({"created": firestore.SERVER_TIMESTAMP}, merge=True)
     return missing
 
+def get_session_status(conv):
+    """Determine session status from conversation data"""
+    # Check new format first
+    if "status" in conv:
+        return conv["status"]
+    
+    # Fallback to analyzing data content for backward compatibility
+    data = conv.get("data", "")
+    if "Status: " in data:
+        for line in data.split("\n"):
+            if line.startswith("Status: "):
+                return line.replace("Status: ", "").strip()
+    
+    # For legacy sessions, if they exist in the database, they were completed
+    # (since old versions only saved at the end)
+    # Check for any indication this is a legacy completed session
+    if conv.get("mode") == "open":
+        # Legacy open mode sessions - look for end screen indicators
+        if any(indicator in data for indicator in [
+            "Completed:", "Session Duration:", "Number of user messages:", 
+            "Number of Completed Criteria:", "Thank you for participating"
+        ]):
+            return "completed"
+    elif conv.get("mode") == "closed":
+        # Legacy closed mode sessions - look for final results indicators  
+        if any(indicator in data for indicator in [
+            "Closed Script Completed:", "Number of questions:", 
+            "Number of correct answers:", "--- Transcript ---"
+        ]):
+            return "completed"
+    
+    # All legacy sessions in database should be completed
+    # (since incremental saving is new)
+    return "completed"
+
 def render_database_screen():
     st.title("Saved Conversations Database")
     db = setup_firestore()
@@ -34,8 +69,10 @@ def render_database_screen():
     backfill_sessions(db)
     conversations = []
     sessions = list(db.collection("sessions").stream())
+    
     for i, session in enumerate(sessions):
         session_id = session.id
+        session_data = session.to_dict()
         convs = list(db.collection("sessions").document(session_id).collection("conversations").order_by("timestamp", direction=firestore.Query.DESCENDING).stream())
         for j, conv in enumerate(convs):
             data = conv.to_dict()
@@ -44,11 +81,22 @@ def render_database_screen():
                 "data": data.get("data", ""),
                 "session_id": session_id,
                 "doc_id": conv.id,
-                "mode": data.get("mode", "open")
+                "mode": data.get("mode", "open"),
+                "status": get_session_status(data),
+                "is_successful": data.get("is_successful", None),
+                "session_finished": data.get("session_finished", None),
+                "session_created": session_data.get("created"),
+                "session_language": session_data.get("language", "unknown")
             })
+    
     # --- FILTERS ---
     st.sidebar.header("Filters")
     mode_filter = st.sidebar.selectbox("Mode", options=["All", "open", "closed"], index=0)
+    
+    # Multi-select status filter
+    status_options = ["ongoing", "success", "no success", "unknown"]
+    status_filter = st.sidebar.multiselect("Status", options=status_options, default=status_options)
+    
     # Date range filter
     min_date = None
     max_date = None
@@ -57,10 +105,21 @@ def render_database_screen():
         min_date = min([t.date() if hasattr(t, 'date') else t for t in timestamps])
         max_date = max([t.date() if hasattr(t, 'date') else t for t in timestamps])
     date_range = st.sidebar.date_input("Date range", value=(min_date, max_date) if min_date and max_date else (None, None))
-    completed_filter = st.sidebar.selectbox("Completed", options=["All", "Completed", "Not Completed"], index=0)
+    
+
+    
     session_id_filter = st.sidebar.text_input("Session ID contains")
+    
+    # Language filter (new)
+    language_filter = st.sidebar.selectbox("Language", options=["All", "en", "he", "unknown"], index=0)
+    
     # --- FILTERING LOGIC ---
-    def is_completed(conv):
+    def is_successful(conv):
+        # Use new success field if available
+        if conv.get("is_successful") is not None:
+            return conv["is_successful"]
+        
+        # Fallback to legacy logic (check data content)
         data = conv["data"]
         if conv["mode"] == "open":
             if "Completed: True" in data:
@@ -68,16 +127,60 @@ def render_database_screen():
             if "Completed: False" in data:
                 return False
         elif conv["mode"] == "closed":
-            if "Closed Script Completed: True" in data:
-                return True
-            if "Closed Script Completed: False" in data:
-                return False
+            # For closed mode, check if ALL answers were correct
+            try:
+                total_questions = None
+                correct_answers = None
+                
+                for line in data.split('\n'):
+                    if line.startswith("Number of questions:"):
+                        total_questions = int(line.split(':')[1].strip())
+                    elif line.startswith("Number of correct answers:"):
+                        correct_answers = int(line.split(':')[1].strip())
+                
+                # Success only if all answers were correct
+                if total_questions is not None and correct_answers is not None:
+                    return correct_answers == total_questions
+                
+                # Fallback to legacy field if numbers not found
+                if "Closed Script Completed: True" in data:
+                    return True
+                if "Closed Script Completed: False" in data:
+                    return False
+            except (ValueError, IndexError):
+                # If parsing fails, fallback to legacy logic
+                if "Closed Script Completed: True" in data:
+                    return True
+                if "Closed Script Completed: False" in data:
+                    return False
+        
         return False  # Default if not found
+    
     filtered = []
     for conv in conversations:
         # Mode filter
         if mode_filter != "All" and conv["mode"] != mode_filter:
             continue
+        
+        # Multi-select status filter
+        if status_filter:  # Only filter if something is selected
+            conv_status = conv["status"]
+            conv_successful = is_successful(conv)
+            
+            # Determine effective status
+            if conv_status == "ongoing":
+                effective_status = "ongoing"
+            elif conv_status == "completed" and conv_successful:
+                effective_status = "success"
+            elif conv_status == "completed" and not conv_successful:
+                effective_status = "no success"
+            else:
+                effective_status = "unknown"
+            
+            # Skip if effective status not in selected filters
+            if effective_status not in status_filter:
+                continue
+        
         # Date range filter
         ts = conv["timestamp"]
         if ts and hasattr(ts, 'date'):
@@ -85,16 +188,24 @@ def render_database_screen():
             if date_range and isinstance(date_range, tuple) and all(date_range):
                 if ts_date < date_range[0] or ts_date > date_range[1]:
                     continue
-        # Completed filter
-        if completed_filter == "Completed" and not is_completed(conv):
-            continue
-        if completed_filter == "Not Completed" and is_completed(conv):
-            continue
+        
+
+        
         # Session ID filter
         if session_id_filter and session_id_filter not in conv["session_id"]:
             continue
+            
+        # Language filter
+        if language_filter != "All" and conv["session_language"] != language_filter:
+            continue
+        
         filtered.append(conv)
+    
     filtered.sort(key=lambda x: x["timestamp"] or 0, reverse=True)
+    
+    # Display session count
+    st.write(f"Found {len(filtered)} sessions")
+    
     for conv in filtered:
         ts = conv["timestamp"]
         if ts:
@@ -104,10 +215,30 @@ def render_database_screen():
                 ts_str = str(ts)
         else:
             ts_str = "No timestamp"
-        label = f"Session: `{conv['session_id']}` | Time: {ts_str} | Mode: {conv['mode']}"
-        with st.expander(label):
-            st.code(conv["data"], language="text")
+        
+        # Determine if session is finished (for success emoji logic)
+        session_is_finished = conv["status"] == "completed"
+        
+        # Success icon logic (only one icon needed)
+        if is_successful(conv):
+            success_icon = "✅"  # Successful
+        elif session_is_finished:
+            success_icon = "❌"  # Finished but unsuccessful
+        else:
+            success_icon = "⏳"  # Still ongoing or unknown
+        
+        label = f"{success_icon} Session: `{conv['session_id']}` | Time: {ts_str} | Mode: {conv['mode']} | Status: {conv['status']} | Lang: {conv['session_language']}"
+        
+        # Use different display for ongoing vs completed sessions
+        if conv["status"] == "ongoing":
+            with st.expander(label, expanded=False):
+                st.warning("⚠️ This is an ongoing session (may be incomplete)")
+                st.code(conv["data"], language="text")
+        else:
+            with st.expander(label):
+                st.code(conv["data"], language="text")
         st.markdown("---")
+    
     if st.button("Back to Menu"):
         st.session_state.pre_done = False
         st.rerun() 
