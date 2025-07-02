@@ -143,7 +143,7 @@ def render_closed_end_screen():
     current_lang = st.session_state.get("language", "en")
     set_page_direction(current_lang)
     script = load_closed_script(current_lang)
-    total = len(script)
+    total = sum(1 for entry in script if "correct_answer" in entry)
     correct = st.session_state.get("closed_correct_count", 0)
     st.title(tr("session_ended_title", current_lang))
     st.write(tr("session_ended_subtitle", current_lang))
@@ -286,7 +286,8 @@ def render_closed_screen():
     # Only show thank you/stats/continue if on last question and NOT answered yet
     if stage == len(script) - 1 and not st.session_state.get("closed_answered", False):
         st.success(tr("thank_you_message", current_lang))
-        st.info(tr("closed_stats_message", current_lang, correct=st.session_state.get("closed_correct_count", 0), total=len(script)))
+        total_questions = sum(1 for entry in script if "correct_answer" in entry)
+        st.info(tr("closed_stats_message", current_lang, correct=st.session_state.get("closed_correct_count", 0), total=total_questions))
         if st.button(tr("continue_button", current_lang), key=f"cont_{stage}"):
             st.session_state.closed_stage += 1
             st.session_state.closed_feedback = None
@@ -486,7 +487,7 @@ def save_closed_session_incrementally(status="ongoing"):
         db = firestore.client()
         
         script = load_closed_script(current_lang)
-        total = len(script)
+        total = sum(1 for entry in script if "correct_answer" in entry)
         correct = st.session_state.get("closed_correct_count", 0)
         current_stage = st.session_state.get("closed_stage", 0)
         
