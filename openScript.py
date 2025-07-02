@@ -354,6 +354,9 @@ def end_session():
         else:
             step_time = 0
         st.session_state.step_times.append(step_time)
+    
+    # Save final session data when manually ended
+    save_session_incrementally("completed")
 
 def text_to_speech(input_text):
     temp_dir = Path("temp_audio")
@@ -614,6 +617,10 @@ def render_screen():
                 add_to_sidebar(tr("guideline_completed_sidebar", current_lang, guideline=guideline), message_type='guideline')
             if st.session_state.rounds_since_last_completion > 0 and tip_text:
                 add_to_sidebar(tip_text, message_type='tip')
+            
+            # Save session data incrementally after each interaction
+            save_session_incrementally("ongoing")
+            
             st.session_state.input_locked = False
             st.rerun()
 
@@ -682,12 +689,8 @@ Conversation Transcript: \n\
         session_id = st.session_state.get("session_id")
         if session_id and not st.session_state.get("session_saved", False):
             with st.spinner(tr("autosave_spinner", current_lang)):
-                # Ensure parent session document exists
-                db.collection("sessions").document(session_id).set({"created": firestore.SERVER_TIMESTAMP}, merge=True)
-                db.collection("sessions").document(session_id).collection("conversations").add({
-                    "timestamp": firestore.SERVER_TIMESTAMP,
-                    "data": save_data
-                })
+                # Use incremental save function for final save
+                save_session_incrementally("completed")
                 st.session_state.session_saved = True
     except Exception as e:
         st.warning(f"Failed to save session to Firestore: {e}")
@@ -712,3 +715,87 @@ Conversation Transcript: \n\
             st.session_state.session_id = session_id
             st.session_state.pre_done = False
             st.rerun()
+
+def save_session_incrementally(status="ongoing"):
+    """Save current session data to Firestore incrementally"""
+    try:
+        session_id = st.session_state.get("session_id")
+        current_lang = st.session_state.get("language", "en")
+        
+        if not session_id:
+            return
+            
+        # Calculate current session stats
+        elapsed_time = 0
+        if st.session_state.get("start_time") and status == "completed":
+            elapsed_time = (st.session_state.get("end_time") or time.time()) - st.session_state.start_time
+        elif st.session_state.get("start_time"):
+            elapsed_time = time.time() - st.session_state.start_time
+            
+        minutes = int(elapsed_time // 60)
+        seconds = int(elapsed_time % 60)
+        duration_str = f"{minutes} {tr('minutes_unit', current_lang)} {seconds} {tr('seconds_unit', current_lang)}"
+        
+        user_msgs = len([msg for msg in st.session_state.messages if msg['role'] == 'user'])
+        total_criteria = 6
+        completed_criteria_str = f"{st.session_state.get('completed_guidelines', 0)}/{total_criteria}"
+        
+        steps_times = st.session_state.get('step_times', [])
+        elapsed_times = []
+        for i in range(len(steps_times)):
+            elapsed_times.append(steps_times[i] - (steps_times[i-1] if i > 0 else 0))
+        steps_times_str = [f"{int(t // 60)}:{int(t % 60):02d}" for t in elapsed_times]
+        
+        # Build conversation transcript
+        conv_transcript = "\n\n".join([
+            f"-- {'Noa' if message['role'] == 'assistant' else 'User'}: {message['content']}"
+            for message in st.session_state.messages
+        ])
+        
+        # Determine completion status
+        is_completed = status == "completed"
+        if not is_completed and st.session_state.get("done", False):
+            is_completed = True
+            status = "completed"
+        
+        save_data = f"""\
+Status: {status}\n\
+Completed: {is_completed}\n\
+Session Duration: {duration_str}\n\
+Number of user messages: {user_msgs}\n\
+Number of Completed Criteria: {completed_criteria_str}\n\
+Time on Each Step (min:sec): {steps_times_str}\n\
+Number of tips shown: {st.session_state.get('tips_shown', 0)}\n\
+Current Stage: {st.session_state.get('current_stage', 0)}\n\
+Conversation Transcript: \n\
+--------------------------\n\n\
+{conv_transcript}\n\n\
+--------------------------\n"""
+
+        # Ensure parent session document exists
+        db.collection("sessions").document(session_id).set({
+            "created": firestore.SERVER_TIMESTAMP,
+            "last_updated": firestore.SERVER_TIMESTAMP,
+            "mode": "open",
+            "status": status,
+            "language": current_lang
+        }, merge=True)
+        
+        # Use a fixed document ID for ongoing sessions, create new for completed
+        doc_id = "current" if status == "ongoing" else f"final_{int(time.time())}"
+        
+        db.collection("sessions").document(session_id).collection("conversations").document(doc_id).set({
+            "timestamp": firestore.SERVER_TIMESTAMP,
+            "data": save_data,
+            "mode": "open",
+            "status": status,
+            "is_completed": is_completed,
+            "user_message_count": user_msgs,
+            "completed_guidelines": st.session_state.get('completed_guidelines', 0),
+            "current_stage": st.session_state.get('current_stage', 0)
+        }, merge=True)
+        
+        return True
+    except Exception as e:
+        st.warning(f"Failed to save session incrementally: {e}")
+        return False

@@ -181,13 +181,8 @@ Number of correct answers: {correct}\n\
         session_id = st.session_state.get("session_id")
         if session_id and not st.session_state.get("session_saved", False):
             with st.spinner(tr("autosave_spinner", current_lang)):
-                # Ensure parent session document exists
-                db.collection("sessions").document(session_id).set({"created": firestore.SERVER_TIMESTAMP}, merge=True)
-                db.collection("sessions").document(session_id).collection("conversations").add({
-                    "timestamp": firestore.SERVER_TIMESTAMP,
-                    "data": save_data,
-                    "mode": "closed"
-                })
+                # Use incremental save function for final save
+                save_closed_session_incrementally("completed")
                 st.session_state.session_saved = True
             st.success(tr("save_results_button", current_lang) + " - Saved to database!")
         elif st.session_state.get("session_saved", False):
@@ -333,6 +328,10 @@ def render_closed_screen():
                     st.session_state.closed_user_choices.append(ans)
                 else:
                     st.session_state.closed_user_choices[stage] = ans
+                
+                # Save session data incrementally after each answer
+                save_closed_session_incrementally("ongoing")
+                
                 if stage == len(script) - 1:
                     st.session_state.closed_stage += 1
                     st.session_state.closed_feedback = None
@@ -378,6 +377,10 @@ def render_closed_screen():
                             st.session_state.closed_user_choices.append(ans)
                         else:
                             st.session_state.closed_user_choices[stage] = ans
+                        
+                        # Save session data incrementally after each audio answer
+                        save_closed_session_incrementally("ongoing")
+                        
                         st.session_state.input_locked = False
                         st.session_state.audio_iteration_count += 1
                         if stage == len(script) - 1:
@@ -464,3 +467,81 @@ def autoplay_audio(file_path):
         </audio>
     """
     st.markdown(md_html, unsafe_allow_html=True)
+
+def save_closed_session_incrementally(status="ongoing"):
+    """Save current closed session data to Firestore incrementally"""
+    try:
+        session_id = st.session_state.get("session_id")
+        current_lang = st.session_state.get("language", "en")
+        
+        if not session_id:
+            return
+            
+        # Initialize Firestore if needed
+        if not hasattr(st.session_state, "_firestore_initialized"):
+            if not firebase_admin._apps:
+                cred = service_account.Credentials.from_service_account_info(json.loads(st.secrets["firestore_creds"]))
+                firebase_admin.initialize_app(cred, {'projectId': 'noabotprompts',})
+            st.session_state._firestore_initialized = True
+        db = firestore.client()
+        
+        script = load_closed_script(current_lang)
+        total = len(script)
+        correct = st.session_state.get("closed_correct_count", 0)
+        current_stage = st.session_state.get("closed_stage", 0)
+        
+        # Determine completion status
+        is_completed = status == "completed" or current_stage >= len(script)
+        if is_completed:
+            status = "completed"
+
+        # Prepare save_data (transcript and stats)
+        save_data = f"""\
+Status: {status}\n\
+Closed Script Completed: {is_completed}\n\
+Number of questions: {total}\n\
+Number of correct answers: {correct}\n\
+Current Stage: {current_stage}\n\
+--- Transcript ---\n"""
+        
+        user_choices = st.session_state.get("closed_user_choices", [])
+        for i, entry in enumerate(script):
+            if i >= current_stage and not is_completed:
+                break  # Don't include future questions for ongoing sessions
+            noa = entry["Noa"]
+            user_choice = user_choices[i] if i < len(user_choices) else "(no answer)"
+            if "correct_answer" in entry:
+                correct_answer = entry["correct_answer"]
+                is_correct = "Yes" if user_choice == correct_answer else "No"
+                save_data += f"\nNoa: {noa}\nUser: {user_choice}\nCorrect: {is_correct}\n"
+            else:
+                save_data += f"\nNoa: {noa}\nUser: {user_choice}\n"
+        save_data += "\n--------------------------\n"
+
+        # Ensure parent session document exists
+        db.collection("sessions").document(session_id).set({
+            "created": firestore.SERVER_TIMESTAMP,
+            "last_updated": firestore.SERVER_TIMESTAMP,
+            "mode": "closed",
+            "status": status,
+            "language": current_lang
+        }, merge=True)
+        
+        # Use a fixed document ID for ongoing sessions, create new for completed
+        doc_id = "current" if status == "ongoing" else f"final_{int(time.time())}"
+        
+        db.collection("sessions").document(session_id).collection("conversations").document(doc_id).set({
+            "timestamp": firestore.SERVER_TIMESTAMP,
+            "data": save_data,
+            "mode": "closed",
+            "status": status,
+            "is_completed": is_completed,
+            "current_stage": current_stage,
+            "total_questions": total,
+            "correct_answers": correct
+        }, merge=True)
+        
+        return True
+    except Exception as e:
+        st.warning(f"Failed to save closed session incrementally: {e}")
+        return False
