@@ -40,20 +40,27 @@ def get_session_status(conv):
             if line.startswith("Status: "):
                 return line.replace("Status: ", "").strip()
     
-    # Check completion status for legacy format
+    # For legacy sessions, if they exist in the database, they were completed
+    # (since old versions only saved at the end)
+    # Check for any indication this is a legacy completed session
     if conv.get("mode") == "open":
-        if "Completed: True" in data:
+        # Legacy open mode sessions - look for end screen indicators
+        if any(indicator in data for indicator in [
+            "Completed:", "Session Duration:", "Number of user messages:", 
+            "Number of Completed Criteria:", "Thank you for participating"
+        ]):
             return "completed"
-        elif "Completed: False" in data:
-            return "ongoing"
     elif conv.get("mode") == "closed":
-        if "Closed Script Completed: True" in data:
+        # Legacy closed mode sessions - look for final results indicators  
+        if any(indicator in data for indicator in [
+            "Closed Script Completed:", "Number of questions:", 
+            "Number of correct answers:", "--- Transcript ---"
+        ]):
             return "completed"
-        elif "Closed Script Completed: False" in data:
-            return "ongoing"
     
-    # Default fallback
-    return "unknown"
+    # All legacy sessions in database should be completed
+    # (since incremental saving is new)
+    return "completed"
 
 def render_database_screen():
     st.title("Saved Conversations Database")
@@ -186,7 +193,17 @@ def render_database_screen():
         
         # Enhanced label with status information
         status_emoji = {"ongoing": "🔄", "completed": "✅", "unknown": "❓"}.get(conv["status"], "❓")
-        success_emoji = "🎯" if is_successful(conv) else "❌" if conv["status"] == "completed" else "⏳"
+        
+        # Determine if session is finished (for success emoji logic)
+        session_is_finished = conv["status"] == "completed"
+        
+        # Success emoji logic
+        if is_successful(conv):
+            success_emoji = "🎯"  # Successful
+        elif session_is_finished:
+            success_emoji = "❌"  # Finished but unsuccessful
+        else:
+            success_emoji = "⏳"  # Still ongoing or unknown
         
         label = f"{status_emoji} {success_emoji} Session: `{conv['session_id']}` | Time: {ts_str} | Mode: {conv['mode']} | Status: {conv['status']} | Lang: {conv['session_language']}"
         
