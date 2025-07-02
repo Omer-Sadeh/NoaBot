@@ -93,11 +93,8 @@ def render_database_screen():
     st.sidebar.header("Filters")
     mode_filter = st.sidebar.selectbox("Mode", options=["All", "open", "closed"], index=0)
     
-    # Status filter (session ongoing vs finished)
-    status_filter = st.sidebar.selectbox("Session Status", options=["All", "ongoing", "completed", "unknown"], index=0)
-    
-    # Success filter (guidelines met / all answers correct)
-    success_filter = st.sidebar.selectbox("Success", options=["All", "Successful", "Unsuccessful"], index=0)
+    # Combined status filter
+    status_filter = st.sidebar.selectbox("Status", options=["All", "ongoing", "success", "no success", "unknown"], index=0)
     
     # Date range filter
     min_date = None
@@ -108,8 +105,7 @@ def render_database_screen():
         max_date = max([t.date() if hasattr(t, 'date') else t for t in timestamps])
     date_range = st.sidebar.date_input("Date range", value=(min_date, max_date) if min_date and max_date else (None, None))
     
-    # Keep backward compatible completion filter for legacy data
-    completed_filter = st.sidebar.selectbox("Completed (Legacy)", options=["All", "Completed", "Not Completed"], index=0)
+
     
     session_id_filter = st.sidebar.text_input("Session ID contains")
     
@@ -142,15 +138,19 @@ def render_database_screen():
         if mode_filter != "All" and conv["mode"] != mode_filter:
             continue
         
-        # Status filter (ongoing vs completed)
-        if status_filter != "All" and conv["status"] != status_filter:
-            continue
-        
-        # Success filter (successful vs unsuccessful)
-        if success_filter == "Successful" and not is_successful(conv):
-            continue
-        if success_filter == "Unsuccessful" and is_successful(conv):
-            continue
+        # Combined status filter
+        if status_filter != "All":
+            conv_status = conv["status"]
+            conv_successful = is_successful(conv)
+            
+            if status_filter == "ongoing" and conv_status != "ongoing":
+                continue
+            elif status_filter == "success" and (conv_status != "completed" or not conv_successful):
+                continue
+            elif status_filter == "no success" and (conv_status != "completed" or conv_successful):
+                continue
+            elif status_filter == "unknown" and conv_status != "unknown":
+                continue
         
         # Date range filter
         ts = conv["timestamp"]
@@ -160,11 +160,7 @@ def render_database_screen():
                 if ts_date < date_range[0] or ts_date > date_range[1]:
                     continue
         
-        # Legacy completed filter (for backward compatibility)
-        if completed_filter == "Completed" and not is_successful(conv):
-            continue
-        if completed_filter == "Not Completed" and is_successful(conv):
-            continue
+
         
         # Session ID filter
         if session_id_filter and session_id_filter not in conv["session_id"]:
@@ -191,23 +187,20 @@ def render_database_screen():
         else:
             ts_str = "No timestamp"
         
-        # Enhanced label with status information
-        status_emoji = {"ongoing": "🔄", "completed": "✅", "unknown": "❓"}.get(conv["status"], "❓")
-        
         # Determine if session is finished (for success emoji logic)
         session_is_finished = conv["status"] == "completed"
         
-        # Success emoji logic
+        # Success icon logic (only one icon needed)
         if is_successful(conv):
-            success_emoji = "🎯"  # Successful
+            success_icon = "✅"  # Successful
         elif session_is_finished:
-            success_emoji = "❌"  # Finished but unsuccessful
+            success_icon = "❌"  # Finished but unsuccessful
         else:
-            success_emoji = "⏳"  # Still ongoing or unknown
+            success_icon = "⏳"  # Still ongoing or unknown
         
-        label = f"{status_emoji} {success_emoji} Session: `{conv['session_id']}` | Time: {ts_str} | Mode: {conv['mode']} | Status: {conv['status']} | Lang: {conv['session_language']}"
+        label = f"{success_icon} Session: `{conv['session_id']}` | Time: {ts_str} | Mode: {conv['mode']} | Status: {conv['status']} | Lang: {conv['session_language']}"
         
-        # Use different colors for ongoing vs completed sessions
+        # Use different display for ongoing vs completed sessions
         if conv["status"] == "ongoing":
             with st.expander(label, expanded=False):
                 st.warning("⚠️ This is an ongoing session (may be incomplete)")
