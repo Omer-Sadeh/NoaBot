@@ -93,8 +93,9 @@ def render_database_screen():
     st.sidebar.header("Filters")
     mode_filter = st.sidebar.selectbox("Mode", options=["All", "open", "closed"], index=0)
     
-    # Combined status filter
-    status_filter = st.sidebar.selectbox("Status", options=["All", "ongoing", "success", "no success", "unknown"], index=0)
+    # Multi-select status filter
+    status_options = ["ongoing", "success", "no success", "unknown"]
+    status_filter = st.sidebar.multiselect("Status", options=status_options, default=status_options)
     
     # Date range filter
     min_date = None
@@ -161,18 +162,23 @@ def render_database_screen():
         if mode_filter != "All" and conv["mode"] != mode_filter:
             continue
         
-        # Combined status filter
-        if status_filter != "All":
+        # Multi-select status filter
+        if status_filter:  # Only filter if something is selected
             conv_status = conv["status"]
             conv_successful = is_successful(conv)
             
-            if status_filter == "ongoing" and conv_status != "ongoing":
-                continue
-            elif status_filter == "success" and (conv_status != "completed" or not conv_successful):
-                continue
-            elif status_filter == "no success" and (conv_status != "completed" or conv_successful):
-                continue
-            elif status_filter == "unknown" and conv_status != "unknown":
+            # Determine effective status
+            if conv_status == "ongoing":
+                effective_status = "ongoing"
+            elif conv_status == "completed" and conv_successful:
+                effective_status = "success"
+            elif conv_status == "completed" and not conv_successful:
+                effective_status = "no success"
+            else:
+                effective_status = "unknown"
+            
+            # Skip if effective status not in selected filters
+            if effective_status not in status_filter:
                 continue
         
         # Date range filter
