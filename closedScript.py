@@ -400,24 +400,29 @@ def render_closed_screen():
     else:
         selected_idx = st.session_state.get("closed_selected_idx")
         correct_idx = st.session_state.get("closed_correct_idx")
-        # Use st-theme for theme-aware colors
+        # Use theme-aware colors for borders and backgrounds
         if theme and theme.get('base') == 'dark':
             bg_color = theme.get('secondaryBackgroundColor', '#000000')
             correct_border = '#34a853'
             incorrect_border = '#ea4335'
             default_border = '#cccccc'
+            correct_bg = 'rgba(52, 168, 83, 0.2)'  # Faded green background
+            incorrect_bg = 'rgba(234, 67, 53, 0.2)'  # Faded red background
             default_text = 'gray'
         else:
             bg_color = theme.get('secondaryBackgroundColor', '#fff')
             correct_border = '#34a853'
             incorrect_border = '#ea4335'
             default_border = '#cccccc'
+            correct_bg = 'rgba(52, 168, 83, 0.15)'  # Faded green background
+            incorrect_bg = 'rgba(234, 67, 53, 0.15)'  # Faded red background
             default_text = 'gray'
+        
         for idx, (ans, key, feedback) in enumerate(answers):
             if idx == correct_idx:
-                st.markdown(f'<div style="background-color:{bg_color};border:1px solid {correct_border};padding:8px;border-radius:8px;margin-bottom:4px;">{ans}</div>', unsafe_allow_html=True)
+                st.markdown(f'<div style="background-color:{correct_bg};border:1px solid {correct_border};padding:8px;border-radius:8px;margin-bottom:4px;">{ans}</div>', unsafe_allow_html=True)
             elif idx == selected_idx:
-                st.markdown(f'<div style="background-color:{bg_color};border:1px solid {incorrect_border};padding:8px;border-radius:8px;margin-bottom:4px;">{ans}</div>', unsafe_allow_html=True)
+                st.markdown(f'<div style="background-color:{incorrect_bg};border:1px solid {incorrect_border};padding:8px;border-radius:8px;margin-bottom:4px;">{ans}</div>', unsafe_allow_html=True)
             else:
                 st.markdown(f'<div style="color:{default_text};background-color:{bg_color};border:1px solid {default_border};padding:8px;border-radius:8px;margin-bottom:4px;">{ans}</div>', unsafe_allow_html=True)
         if st.session_state.closed_feedback:
