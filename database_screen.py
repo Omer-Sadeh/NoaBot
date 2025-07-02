@@ -126,10 +126,33 @@ def render_database_screen():
             if "Completed: False" in data:
                 return False
         elif conv["mode"] == "closed":
-            if "Closed Script Completed: True" in data:
-                return True
-            if "Closed Script Completed: False" in data:
-                return False
+            # For closed mode, check if ALL answers were correct
+            try:
+                total_questions = None
+                correct_answers = None
+                
+                for line in data.split('\n'):
+                    if line.startswith("Number of questions:"):
+                        total_questions = int(line.split(':')[1].strip())
+                    elif line.startswith("Number of correct answers:"):
+                        correct_answers = int(line.split(':')[1].strip())
+                
+                # Success only if all answers were correct
+                if total_questions is not None and correct_answers is not None:
+                    return correct_answers == total_questions
+                
+                # Fallback to legacy field if numbers not found
+                if "Closed Script Completed: True" in data:
+                    return True
+                if "Closed Script Completed: False" in data:
+                    return False
+            except (ValueError, IndexError):
+                # If parsing fails, fallback to legacy logic
+                if "Closed Script Completed: True" in data:
+                    return True
+                if "Closed Script Completed: False" in data:
+                    return False
+        
         return False  # Default if not found
     
     filtered = []
