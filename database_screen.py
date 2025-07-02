@@ -62,6 +62,95 @@ def get_session_status(conv):
     # (since incremental saving is new)
     return "completed"
 
+def detect_language_from_data(data):
+    """Detect language from conversation data for legacy sessions"""
+    if not data:
+        return "unknown"
+    
+    # Hebrew language indicators
+    hebrew_indicators = [
+        # Open session Hebrew indicators
+        "דקות",  # minutes in Hebrew
+        "שניות",  # seconds in Hebrew  
+        "הושלמו",  # completed in Hebrew
+        "משך השיחה",  # conversation duration in Hebrew
+        "מספר הודעות משתמש",  # number of user messages in Hebrew
+        "מספר קריטריונים",  # number of criteria in Hebrew
+        "טיפים",  # tips in Hebrew
+        "תודה על השתתפותך",  # thank you for participating in Hebrew
+        "זמן בכל שלב",  # time on each step in Hebrew
+        "שלבים שהושלמו",  # completed steps in Hebrew
+        "עברית",  # Hebrew language name
+        "-- נועה:",  # Noa in Hebrew transcript format
+        "נועה:",  # Noa in Hebrew
+        
+        # Closed session Hebrew indicators (conversation content)
+        "דנה",  # Dana (common name in Hebrew sessions)
+        "ברגע האחרון",  # last minute
+        "חברות",  # friends/friendship
+        "מתבאסתי",  # was bummed/upset
+        "קבענו",  # we arranged/planned
+        "היפגש",  # to meet
+        "מצטערת",  # sorry
+        "מבאס",  # bummer/annoying
+        "קונפליקט",  # conflict
+        "במצבים כאלה",  # in such situations
+        "ענית נכון על",  # answered correctly (from closed_stats_message)
+        "מתוך",  # out of (from closed_stats_message)
+        "ההצעה שלך",  # your suggestion
+        "פשרה טובה",  # good compromise
+        "חשובה לי",  # important to me
+        "בלתי נמנע",  # inevitable
+        "התבאסתי",  # I was upset
+        "לקבוע תוכניות",  # to make plans
+        "לצאת מהבית",  # to leave the house
+        "לא יכולה",  # can't/couldn't
+        "כבר לא יודעת",  # don't know anymore
+    ]
+    
+    # English language indicators  
+    english_indicators = [
+        # Open session English indicators
+        "minutes",
+        "seconds", 
+        "Session Duration:",
+        "Number of user messages:",
+        "Number of Completed Criteria:",
+        "Time on Each Step",
+        "tips shown:",
+        "Thank you for participating",
+        "Conversation Duration:",
+        "-- Noa:",  # Noa in English transcript format
+        
+        # Closed session English indicators
+        "Number of questions:",
+        "Number of correct answers:",
+        "Closed Script Completed:",
+        "--- Transcript ---",
+        "You answered",
+        "out of",
+        "correctly",
+    ]
+    
+    # Check for Hebrew characters (Unicode range for Hebrew)
+    hebrew_char_count = sum(1 for char in data if '\u0590' <= char <= '\u05FF')
+    
+    # Count occurrences of language indicators
+    hebrew_count = sum(1 for indicator in hebrew_indicators if indicator in data)
+    english_count = sum(1 for indicator in english_indicators if indicator in data)
+    
+    # Add weight for Hebrew characters
+    if hebrew_char_count > 10:  # If there are Hebrew characters, add weight
+        hebrew_count += 5
+    
+    # Determine language based on which indicators appear more
+    if hebrew_count > english_count:
+        return "he"
+    elif english_count > hebrew_count:
+        return "en"
+    else:
+        return "unknown"
+
 def render_database_screen():
     st.title("Saved Conversations Database")
     db = setup_firestore()
@@ -76,6 +165,11 @@ def render_database_screen():
         convs = list(db.collection("sessions").document(session_id).collection("conversations").order_by("timestamp", direction=firestore.Query.DESCENDING).stream())
         for j, conv in enumerate(convs):
             data = conv.to_dict()
+            # Get language from session data, fallback to detecting from conversation data for legacy sessions
+            session_language = session_data.get("language", "unknown")
+            if session_language == "unknown":
+                session_language = detect_language_from_data(data.get("data", ""))
+            
             conversations.append({
                 "timestamp": data.get("timestamp"),
                 "data": data.get("data", ""),
@@ -86,7 +180,7 @@ def render_database_screen():
                 "is_successful": data.get("is_successful", None),
                 "session_finished": data.get("session_finished", None),
                 "session_created": session_data.get("created"),
-                "session_language": session_data.get("language", "unknown")
+                "session_language": session_language
             })
     
     # --- FILTERS ---
