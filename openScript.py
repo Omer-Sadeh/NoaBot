@@ -752,15 +752,17 @@ def save_session_incrementally(status="ongoing"):
             for message in st.session_state.messages
         ])
         
-        # Determine completion status
-        is_completed = status == "completed"
-        if not is_completed and st.session_state.get("done", False):
-            is_completed = True
+        # Determine session completion status (ongoing vs finished)
+        session_finished = status == "completed" or st.session_state.get("done", False) or not st.session_state.get("running", True)
+        if session_finished:
             status = "completed"
+        
+        # Determine success status (guidelines met)
+        is_successful = st.session_state.get("done", False)
         
         save_data = f"""\
 Status: {status}\n\
-Completed: {is_completed}\n\
+Completed: {is_successful}\n\
 Session Duration: {duration_str}\n\
 Number of user messages: {user_msgs}\n\
 Number of Completed Criteria: {completed_criteria_str}\n\
@@ -789,7 +791,8 @@ Conversation Transcript: \n\
             "data": save_data,
             "mode": "open",
             "status": status,
-            "is_completed": is_completed,
+            "is_successful": is_successful,
+            "session_finished": session_finished,
             "user_message_count": user_msgs,
             "completed_guidelines": st.session_state.get('completed_guidelines', 0),
             "current_stage": st.session_state.get('current_stage', 0)

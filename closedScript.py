@@ -490,15 +490,18 @@ def save_closed_session_incrementally(status="ongoing"):
         correct = st.session_state.get("closed_correct_count", 0)
         current_stage = st.session_state.get("closed_stage", 0)
         
-        # Determine completion status
-        is_completed = status == "completed" or current_stage >= len(script)
-        if is_completed:
+        # Determine session completion status (ongoing vs finished)
+        session_finished = status == "completed" or current_stage >= len(script)
+        if session_finished:
             status = "completed"
+            
+        # Determine success status (all answers correct)
+        is_successful = session_finished and correct == total
 
         # Prepare save_data (transcript and stats)
         save_data = f"""\
 Status: {status}\n\
-Closed Script Completed: {is_completed}\n\
+Closed Script Completed: {is_successful}\n\
 Number of questions: {total}\n\
 Number of correct answers: {correct}\n\
 Current Stage: {current_stage}\n\
@@ -506,7 +509,7 @@ Current Stage: {current_stage}\n\
         
         user_choices = st.session_state.get("closed_user_choices", [])
         for i, entry in enumerate(script):
-            if i >= current_stage and not is_completed:
+            if i >= current_stage and not session_finished:
                 break  # Don't include future questions for ongoing sessions
             noa = entry["Noa"]
             user_choice = user_choices[i] if i < len(user_choices) else "(no answer)"
@@ -535,7 +538,8 @@ Current Stage: {current_stage}\n\
             "data": save_data,
             "mode": "closed",
             "status": status,
-            "is_completed": is_completed,
+            "is_successful": is_successful,
+            "session_finished": session_finished,
             "current_stage": current_stage,
             "total_questions": total,
             "correct_answers": correct
