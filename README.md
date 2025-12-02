@@ -12,7 +12,17 @@ A simple Streamlit app that shows how to build a chatbot using OpenAI's GPT-3.5.
    $ pip install -r requirements.txt
    ```
 
-2. Run the app
+2. Set up secrets
+
+   Create `.streamlit/secrets.toml` with the required secrets:
+   ```toml
+   openai_key = "sk-..."
+   firestore_creds = '{"type": "service_account", ...}'
+   ```
+   
+   You can find the secret values in the [Streamlit Cloud dashboard](https://share.streamlit.io/) → Select the app → Settings → Secrets.
+
+3. Run the app
 
    ```
    $ streamlit run streamlit_app.py
