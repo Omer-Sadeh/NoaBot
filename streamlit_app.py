@@ -1,4 +1,5 @@
 import streamlit as st
+import _version
 
 from openScript import setup_env, render_screen, render_end_screen
 from closedScript import setup_env_closed, render_closed_screen
@@ -24,6 +25,15 @@ def pre_game_menu():
         st.rerun()
 
 if __name__ == "__main__":
+    st.markdown(
+        f"""
+        <div style="position: fixed; bottom: 10px; right: 10px; opacity: 0.5; font-size: 12px; z-index: 9999; pointer-events: none;">
+            v{_version.__version__}
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
     if not st.session_state.get("pre_done", False):
         pre_game_menu()
     else:
