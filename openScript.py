@@ -7,6 +7,7 @@ import json
 import concurrent.futures
 import time
 import uuid
+import config
 
 from google.oauth2 import service_account
 import json
@@ -218,7 +219,7 @@ def evaluate_guidelines(state: dict):
         therapy_session += f"{'Noa' if message['role'] == 'assistant' else 'Therapist'}: {message['content']}\n\n"
 
     answer = client.chat.completions.create(
-        model="o3-mini",
+        model=config.ADVANCED_REASONING_MODEL,
         messages=[{"role": "system", "content": system}, {"role": "user", "content": therapy_session}],
         response_format={
             "type": "json_schema",
@@ -299,7 +300,7 @@ def get_director_tip(state: dict):
         therapy_session += f"{'Noa' if message['role'] == 'assistant' else 'Therapist'}: {message['content']}\n\n"
 
     answer = client.chat.completions.create(
-        model="o3-mini",
+        model=config.ADVANCED_REASONING_MODEL,
         messages=[{"role": "system", "content": system}, {"role": "user", "content": therapy_session}],
         response_format={
             "type": "json_schema",
@@ -365,7 +366,7 @@ def text_to_speech(input_text):
 
     try:
         with client.audio.speech.with_streaming_response.create(
-                model="gpt-4o-mini-tts",
+                model=config.TTS_MODEL,
                 voice="coral",
                 input=input_text
         ) as response:
@@ -534,7 +535,7 @@ def render_screen():
             try:
                 audio_file_for_transcription = ("audio.wav", audio_bytes, "audio/wav")
                 transcribed_text = client.audio.transcriptions.create(
-                    model="gpt-4o-transcribe", 
+                    model=config.TRANSCRIPTION_MODEL, 
                     file=audio_file_for_transcription,
                     language=current_lang 
                 ).text
@@ -580,7 +581,7 @@ def render_screen():
             if st.session_state.step_start_time is None:
                 st.session_state.step_start_time = time.time()
             stream = client.chat.completions.create(
-                model="gpt-4o-mini",
+                model=config.BASIC_CHAT_MODEL,
                 messages=[{"role": "system", "content": st.session_state.system_prompt}] + st.session_state.messages,
                 stream=True,
             )

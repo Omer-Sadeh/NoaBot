@@ -11,6 +11,7 @@ from streamlit_theme import st_theme
 import base64
 from pathlib import Path
 from openai import OpenAI
+import config
 
 if not firebase_admin._apps:
     cred = service_account.Credentials.from_service_account_info(json.loads(st.secrets["firestore_creds"]))
@@ -105,7 +106,7 @@ def set_language_closed(lang):
 
 def recognize_option_from_text(text: str, options: list[str]) -> int:
     response = client.chat.completions.create(
-        model="gpt-4o-mini",
+        model=config.BASIC_CHAT_MODEL,
         messages=[
             {
                 "role": "system",
@@ -354,7 +355,7 @@ def render_closed_screen():
                 try:
                     audio_file_for_transcription = ("audio.wav", audio_bytes, "audio/wav")
                     transcript = client.audio.transcriptions.create(
-                        model="gpt-4o-transcribe",
+                        model=config.TRANSCRIPTION_MODEL,
                         file=audio_file_for_transcription,
                         language=current_lang
                     ).text
@@ -448,7 +449,7 @@ def text_to_speech(input_text):
     output_path = temp_dir / "speech.mp3"
     try:
         with client.audio.speech.with_streaming_response.create(
-                model="gpt-4o-mini-tts",
+                model=config.TTS_MODEL,
                 voice="coral",
                 input=input_text
         ) as response:
