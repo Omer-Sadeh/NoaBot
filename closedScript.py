@@ -87,7 +87,7 @@ def setup_env_closed():
     if "closed_user_choices" not in st.session_state:
         st.session_state.closed_user_choices = []
     if "voice" not in st.session_state:
-        st.session_state.voice = False
+        st.session_state.voice = True
     if "input_locked" not in st.session_state:
         st.session_state.input_locked = False
     if "audio_played_stage" not in st.session_state:

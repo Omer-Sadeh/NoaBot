@@ -187,7 +187,7 @@ def reset_session():
     st.session_state.tips_shown = 0
     st.session_state.sidebar_messages = [] # Initialize sidebar messages
 
-    st.session_state.voice = False
+    st.session_state.voice = True
     if "language" not in st.session_state:
         st.session_state.language = "en"
 
