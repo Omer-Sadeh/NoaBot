@@ -658,10 +658,7 @@ def render_end_screen():
     st.write(tr("completed_criteria_label", current_lang, count=completed_criteria_str))
 
     steps_times = st.session_state.step_times if hasattr(st.session_state, 'step_times') else []
-    elapsed_times = []
-    for i in range(len(steps_times)):
-        elapsed_times.append(steps_times[i] - (steps_times[i-1] if i > 0 else 0))
-    steps_times_str = [f"{int(t // 60)}:{int(t % 60):02d}" for t in elapsed_times]
+    steps_times_str = [f"{int(t // 60)}:{int(t % 60):02d}" for t in steps_times]
     st.write(tr("time_on_each_step_label", current_lang, times=steps_times_str))
 
     st.write(tr("tips_shown_label", current_lang, count=st.session_state.tips_shown))
@@ -742,10 +739,7 @@ def save_session_incrementally(status="ongoing"):
         completed_criteria_str = f"{st.session_state.get('completed_guidelines', 0)}/{total_criteria}"
         
         steps_times = st.session_state.get('step_times', [])
-        elapsed_times = []
-        for i in range(len(steps_times)):
-            elapsed_times.append(steps_times[i] - (steps_times[i-1] if i > 0 else 0))
-        steps_times_str = [f"{int(t // 60)}:{int(t % 60):02d}" for t in elapsed_times]
+        steps_times_str = [f"{int(t // 60)}:{int(t % 60):02d}" for t in steps_times]
         
         # Build conversation transcript
         conv_transcript = "\n\n".join([
