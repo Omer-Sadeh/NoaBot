@@ -131,6 +131,73 @@ client = OpenAI(api_key=st.secrets["openai_key"])
 async_context = concurrent.futures.ThreadPoolExecutor()
 db = firestore.client()
 
+def check_model_availability():
+    """Check if all configured models are available in the OpenAI client"""
+    required_models = {
+        "BASIC_CHAT_MODEL": config.BASIC_CHAT_MODEL,
+        "ADVANCED_REASONING_MODEL": config.ADVANCED_REASONING_MODEL,
+        "TRANSCRIPTION_MODEL": config.TRANSCRIPTION_MODEL,
+        "TTS_MODEL": config.TTS_MODEL
+    }
+    
+    try:
+        available_models = client.models.list()
+        available_model_ids = [model.id for model in available_models.data]
+        
+        missing_models = {}
+        for name, model_id in required_models.items():
+            if model_id not in available_model_ids:
+                missing_models[name] = model_id
+        
+        return missing_models, available_model_ids
+    except Exception as e:
+        st.error(f"Failed to fetch available models: {e}")
+        return None, None
+
+def render_model_error_screen(missing_models, available_models):
+    """Render a screen showing missing models and available alternatives"""
+    st.title("⚠️ Model Configuration Error")
+    st.error("Some required models are not available in your OpenAI account.")
+    
+    st.subheader("Missing Models:")
+    for config_name, model_id in missing_models.items():
+        st.warning(f"**{config_name}**: `{model_id}`")
+    
+    st.divider()
+    
+    st.subheader("Available Models:")
+    st.write("Here are all models currently available in your OpenAI account:")
+    
+    chat_models = []
+    audio_models = []
+    other_models = []
+    
+    for model_id in sorted(available_models):
+        if "gpt" in model_id.lower() or "o1" in model_id or "o3" in model_id:
+            if "transcribe" in model_id.lower() or "tts" in model_id.lower():
+                audio_models.append(model_id)
+            else:
+                chat_models.append(model_id)
+        else:
+            other_models.append(model_id)
+    
+    if chat_models:
+        with st.expander("💬 Chat/Text Models", expanded=True):
+            for model in chat_models:
+                st.code(model)
+    
+    if audio_models:
+        with st.expander("🎤 Audio Models (Transcription/TTS)", expanded=True):
+            for model in audio_models:
+                st.code(model)
+    
+    if other_models:
+        with st.expander("🔧 Other Models", expanded=False):
+            for model in other_models:
+                st.code(model)
+    
+    st.info("💡 Please update the models in `config.py` to use available models from the list above.")
+
 def load_prompt(file_path: str, language: str = "en") -> str:
     full_path = f"prompts/{language}/{file_path}"
     try:
@@ -391,16 +458,40 @@ def autoplay_audio(file_path):
 # - Main functions -
 
 def setup_env():
-    if "language" not in st.session_state: # Ensure language is set at the very beginning
-        st.session_state.language = "en" # Default to English
-    if "translations" not in st.session_state or st.session_state.get("translations_lang") != st.session_state.language: # Ensure translations are loaded initially
+    if "language" not in st.session_state:
+        st.session_state.language = "en"
+    if "translations" not in st.session_state or st.session_state.get("translations_lang") != st.session_state.language:
         st.session_state.translations = load_translations(st.session_state.language)
         st.session_state.translations_lang = st.session_state.language
-    if "sidebar_messages" not in st.session_state: # Ensure sidebar_messages is initialized
+    if "sidebar_messages" not in st.session_state:
         st.session_state.sidebar_messages = []
 
+    if "model_check_done" not in st.session_state:
+        st.session_state.model_check_done = False
+        st.session_state.models_available = True
+        st.session_state.missing_models = {}
+        st.session_state.available_models = []
+
+    if not st.session_state.model_check_done:
+        missing, available = check_model_availability()
+        if missing is None:
+            st.error("Unable to verify model availability. Please check your OpenAI API connection.")
+            st.stop()
+        
+        st.session_state.model_check_done = True
+        if missing:
+            st.session_state.models_available = False
+            st.session_state.missing_models = missing
+            st.session_state.available_models = available
+        else:
+            st.session_state.models_available = True
+
+    if not st.session_state.models_available:
+        render_model_error_screen(st.session_state.missing_models, st.session_state.available_models)
+        st.stop()
+
     if "running" not in st.session_state:
-        reset_session() # This will now use the language from session_state
+        reset_session()
     
 def render_screen():
     def set_language(lang):
