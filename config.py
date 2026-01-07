@@ -38,7 +38,7 @@ BASIC_CHAT_MODEL = "gpt-5-mini"
 # Used for:
 # 1. open script: Checking if the user met criteria
 # 2. open script: Generating advice for the user
-ADVANCED_REASONING_MODEL = "gpt-5-mini"
+ADVANCED_REASONING_MODEL = "gpt-5.1"
 
 # Used for:
 # 1. closed script: Audio transcription
