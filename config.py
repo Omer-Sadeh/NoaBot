@@ -33,7 +33,7 @@ Centralized configuration for OpenAI models used across the application.
 # Used for:
 # 1. closed script: recognizing user intent from options
 # 2. open script: Main conversation loop (generating Noa's responses)
-BASIC_CHAT_MODEL = "gpt-4o-mini"
+BASIC_CHAT_MODEL = "gpt-5.1-mini"
 
 # Used for:
 # 1. open script: Checking if the user met criteria
