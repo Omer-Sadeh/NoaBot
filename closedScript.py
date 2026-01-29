@@ -215,6 +215,8 @@ Number of correct answers: {correct}\n\
             st.session_state.clear()
             st.session_state.session_id = session_id
             st.session_state.pre_done = False
+            st.session_state.url_params_processed = False
+            st.query_params.clear()
             st.rerun()
 
 def render_closed_screen():

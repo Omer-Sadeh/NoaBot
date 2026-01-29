@@ -34,6 +34,27 @@ if __name__ == "__main__":
         unsafe_allow_html=True
     )
 
+    # Check for URL query parameters for direct access
+    if "mode" in st.query_params and "lang" in st.query_params and not st.session_state.get("url_params_processed", False):
+        mode_param = st.query_params["mode"]
+        lang_param = st.query_params["lang"]
+        
+        # Validate parameters
+        valid_modes = ["open", "closed", "database"]
+        valid_langs = ["en", "he"]
+        
+        if mode_param in valid_modes and lang_param in valid_langs:
+            # Auto-configure from URL parameters
+            st.session_state.language = lang_param
+            if mode_param == "database":
+                st.session_state.menu_mode = "database"
+            else:
+                st.session_state.game_mode = mode_param
+                st.session_state.menu_mode = "game"
+            st.session_state.pre_done = True
+            st.session_state.url_params_processed = True
+            st.rerun()
+
     if not st.session_state.get("pre_done", False):
         pre_game_menu()
     else:
