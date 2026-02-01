@@ -91,6 +91,7 @@ def setup_env_closed():
         st.session_state.voice = True
     if "input_locked" not in st.session_state:
         st.session_state.input_locked = False
+    # Initialize audio_played_stage to -1 to ensure first audio plays
     if "audio_played_stage" not in st.session_state:
         st.session_state.audio_played_stage = -1
 
@@ -271,7 +272,12 @@ def render_closed_screen():
             with st.spinner(tr("generating_audio_spinner", current_lang)):
                 audio_file = text_to_speech(entry["Noa"])
                 if audio_file:
-                    autoplay_audio(audio_file)
+                    # For first message via URL, show manual player due to browser autoplay restrictions
+                    if stage == 0 and st.session_state.get("url_params_processed", False) and not st.session_state.get("first_audio_played", False):
+                        st.audio(str(audio_file), format="audio/mp3")
+                        st.session_state.first_audio_played = True
+                    else:
+                        autoplay_audio(audio_file)
                     # Mark this stage as played so we don't regenerate audio on next rerun
                     st.session_state.audio_played_stage = stage
                 else:
@@ -339,7 +345,8 @@ def render_closed_screen():
                     st.session_state.audio_played_stage = -1
                     st.rerun()
                 else:
-                    st.session_state.audio_played_stage = -1
+                    # Don't reset audio_played_stage here - we're still on the same stage
+                    # It will be reset when clicking Continue button
                     st.rerun()
         # Render the audio input below the answer buttons
         audio_bytes = st.audio_input(audio_option_label, key=audio_input_key, disabled=input_locked)
@@ -390,7 +397,8 @@ def render_closed_screen():
                             st.session_state.audio_played_stage = -1
                             st.rerun()
                         else:
-                            st.session_state.audio_played_stage = -1
+                            # Don't reset audio_played_stage here - we're still on the same stage
+                            # It will be reset when clicking Continue button
                             st.rerun()
                 except Exception as e:
                     st.error(tr("transcription_error", current_lang, error=str(e)))

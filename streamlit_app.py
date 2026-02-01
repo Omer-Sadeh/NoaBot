@@ -46,6 +46,8 @@ if __name__ == "__main__":
         if mode_param in valid_modes and lang_param in valid_langs:
             # Auto-configure from URL parameters
             st.session_state.language = lang_param
+            # Also set language query param for consistency with language changes
+            st.query_params["language"] = lang_param
             if mode_param == "database":
                 st.session_state.menu_mode = "database"
             else:
