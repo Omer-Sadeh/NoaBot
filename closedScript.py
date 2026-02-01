@@ -267,24 +267,17 @@ def render_closed_screen():
     st.write(entry["Noa"])
     # --- Audio logic (AFTER Noa's text, BEFORE any button rendering) ---
     if st.session_state.voice and not st.session_state.get("closed_answered", False):
-        if (not st.session_state.get("input_locked", False)) and st.session_state.get("audio_played_stage", -1) != stage:
-            st.session_state.input_locked = True
+        if st.session_state.get("audio_played_stage", -1) != stage:
             with st.spinner(tr("generating_audio_spinner", current_lang)):
                 audio_file = text_to_speech(entry["Noa"])
                 if audio_file:
                     autoplay_audio(audio_file)
-                    def estimate_audio_duration(text, wps=2.5, buffer=0.5):
-                        words = len(text.split())
-                        return words / wps + buffer
-                    duration = estimate_audio_duration(entry["Noa"])
-                    time.sleep(duration)
+                    # Mark this stage as played so we don't regenerate audio on next rerun
+                    st.session_state.audio_played_stage = stage
                 else:
                     st.warning(tr("audio_generation_error", current_lang, error="Failed to generate audio file path."))
-            st.session_state.input_locked = False
-            st.session_state.audio_played_stage = stage
-            st.rerun()
-        if st.session_state.get("input_locked", False):
-            return  # Don't show any buttons while audio is playing
+                    # Mark as played even on failure to avoid retry loop
+                    st.session_state.audio_played_stage = stage
 
     # Only show thank you/stats/continue if on last question and NOT answered yet
     if stage == len(script) - 1 and not st.session_state.get("closed_answered", False):
@@ -448,14 +441,33 @@ def render_closed_screen():
 def text_to_speech(input_text):
     temp_dir = Path("temp_audio")
     temp_dir.mkdir(exist_ok=True)
-    output_path = temp_dir / "speech.mp3"
+    
+    # Clean up old audio files (older than 1 hour) to prevent disk space issues
     try:
-        with client.audio.speech.with_streaming_response.create(
+        import time as time_module
+        current_time = time_module.time()
+        for old_file in temp_dir.glob("speech_*.mp3"):
+            if current_time - old_file.stat().st_mtime > 3600:  # 1 hour
+                old_file.unlink(missing_ok=True)
+    except Exception:
+        pass  # Cleanup is best-effort, don't fail if it doesn't work
+    
+    # Use unique filename to avoid race conditions
+    output_path = temp_dir / f"speech_{uuid.uuid4()}.mp3"
+    try:
+        # Use with_options to set timeout for this specific request
+        with client.with_options(timeout=30.0).audio.speech.with_streaming_response.create(
                 model=config.TTS_MODEL,
                 voice="coral",
                 input=input_text
         ) as response:
             response.stream_to_file(output_path)
+        
+        # Verify the file was created and has content
+        if not output_path.exists() or output_path.stat().st_size == 0:
+            st.error(tr("audio_generation_error", st.session_state.get("language", "en"), error="Audio file was not created or is empty"))
+            return None
+            
         return output_path
     except Exception as e:
         st.error(tr("audio_generation_error", st.session_state.get("language", "en"), error=str(e)))

@@ -27,7 +27,7 @@ def pre_game_menu():
 if __name__ == "__main__":
     st.markdown(
         f"""
-        <div style="position: fixed; bottom: 10px; right: 10px; opacity: 0.5; font-size: 12px; z-index: 9999; pointer-events: none;">
+        <div style="position: fixed; bottom: 10px; left: 10px; opacity: 0.5; font-size: 12px; z-index: 9999; pointer-events: none;">
             v{_version.__version__}
         </div>
         """,

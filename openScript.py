@@ -429,15 +429,34 @@ def end_session():
 def text_to_speech(input_text):
     temp_dir = Path("temp_audio")
     temp_dir.mkdir(exist_ok=True)
-    output_path = temp_dir / "speech.mp3"
+    
+    # Clean up old audio files (older than 1 hour) to prevent disk space issues
+    try:
+        import time as time_module
+        current_time = time_module.time()
+        for old_file in temp_dir.glob("speech_*.mp3"):
+            if current_time - old_file.stat().st_mtime > 3600:  # 1 hour
+                old_file.unlink(missing_ok=True)
+    except Exception:
+        pass  # Cleanup is best-effort, don't fail if it doesn't work
+    
+    # Use unique filename to avoid race conditions
+    output_path = temp_dir / f"speech_{uuid.uuid4()}.mp3"
 
     try:
-        with client.audio.speech.with_streaming_response.create(
+        # Use with_options to set timeout for this specific request
+        with client.with_options(timeout=30.0).audio.speech.with_streaming_response.create(
                 model=config.TTS_MODEL,
                 voice="coral",
                 input=input_text
         ) as response:
             response.stream_to_file(output_path)
+        
+        # Verify the file was created and has content
+        if not output_path.exists() or output_path.stat().st_size == 0:
+            st.error(tr("audio_generation_error", st.session_state.get("language", "en"), error="Audio file was not created or is empty"))
+            return None
+            
         return output_path
     except Exception as e:
         st.error(tr("audio_generation_error", st.session_state.get("language", "en"), error=str(e)))
@@ -686,11 +705,6 @@ def render_screen():
                     audio_file = text_to_speech(response)
                     if audio_file:
                         autoplay_audio(audio_file)
-                        def estimate_audio_duration(text, wps=2.5, buffer=0.5):
-                            words = len(text.split())
-                            return words / wps + buffer
-                        duration = estimate_audio_duration(response)
-                        time.sleep(duration)
                     else:
                         st.warning(tr("audio_generation_error", current_lang, error="Failed to generate audio file path."))
             completed_guidelines_list, new_state_dict_from_eval = guidelines_promise.result() 
