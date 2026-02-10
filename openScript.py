@@ -600,7 +600,7 @@ def render_screen():
                     st.success(message_info['content'])
 
     st.title(tr("app_title", current_lang))
-    st.write(tr("app_subtitle", current_lang))
+    st.write(tr("app_subtitle_open", current_lang))
     st.checkbox(tr("sound_voice_checkbox", current_lang), value=st.session_state.voice, on_change=lambda: st.session_state.update({"voice": not st.session_state.voice}))
 
     # Create a container for the conversation history

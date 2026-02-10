@@ -238,7 +238,7 @@ def render_closed_screen():
     entry = script[stage]
     # --- UI rendering starts here ---
     st.title(tr("app_title", current_lang))
-    st.write(tr("app_subtitle", current_lang))
+    st.write(tr("app_subtitle_closed", current_lang))
     lang_options = {"English": "en", "עברית": "he"}
     lang_keys = list(lang_options.keys())
     lang_values = list(lang_options.values())
