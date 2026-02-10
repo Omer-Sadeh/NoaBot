@@ -36,6 +36,6 @@
     "continue_button": "Continue",
     "try_again_button": "Try Again",
     "closed_stats_message": "You answered {correct} out of {total} correctly.",
-    "back_to_menu_button": "Back to Main Menu",
+    "continue_to_questionnaire_button": "Continue to Questionnaire",
     "autosave_spinner": "Saving session, please wait..."
 } 

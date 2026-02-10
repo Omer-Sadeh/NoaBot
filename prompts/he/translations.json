@@ -36,6 +36,6 @@
     "continue_button": "המשך",
     "try_again_button": "נסה שוב",
     "closed_stats_message": "ענית נכון על {correct} מתוך {total}.",
-    "back_to_menu_button": "חזרה לתפריט הראשי",
+    "continue_to_questionnaire_button": "המשך לשאלון",
     "autosave_spinner": "שומר את הסשן, אנא המתן..."
 } 

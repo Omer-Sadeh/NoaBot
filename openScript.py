@@ -805,21 +805,17 @@ Conversation Transcript: \n\
         mime="text/plain"
     )
 
-    # --- Add buttons for new conversation and main menu ---
+    # --- Add buttons for new conversation and questionnaire ---
     col1, col2 = st.columns(2)
     with col1:
         if st.button(tr("try_again_button", current_lang)):
             reset_session()
             st.rerun()
     with col2:
-        if st.button(tr("back_to_menu_button", current_lang)):
-            session_id = st.session_state.get("session_id")
-            st.session_state.clear()
-            st.session_state.session_id = session_id
-            st.session_state.pre_done = False
-            st.session_state.url_params_processed = False
-            st.query_params.clear()
-            st.rerun()
+        st.link_button(
+            tr("continue_to_questionnaire_button", current_lang),
+            "https://www.surveymonkey.com/r/NP7M559"
+        )
 
 def save_session_incrementally(status="ongoing"):
     """Save current session data to Firestore incrementally"""
