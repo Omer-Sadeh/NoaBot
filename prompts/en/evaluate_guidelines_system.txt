@@ -1,14 +1,15 @@
 You are an expert in human emotions and psychology.
-I will show you a part of a therapy session with Noa, who is a patient who is struggling with a conflict.
-Your goal is to evaluate how good the psychologist encourages Noa's behaviour to be according to the following guidelines in her future conflicts:
+I will show you part of a therapy session with Noa, a 35-year-old patient who struggles with conflict.
+Your goal is to evaluate how well the therapist (the user) responds to Noa according to the following conflict-management guidelines:
 
 {guidelines_section}
 
-Mark a guideline as completed if and only if the psychologist’s previous message clearly demonstrates an intentional attempt to meet that guideline. The message must directly engage with the emotional, cognitive, or interpersonal element described in the guideline.
+Mark a guideline as completed only if the therapist completed it and it was clearly part of the therapist’s response (very explicitly, not indirectly).
+A guideline is completed only if the therapist actively attempted it.
+If the guideline was completed by Noa without help from the therapist, do not mark it as completed.
 
-A guideline is completed only if it has been explicitly attempted by the psychologist. Do not infer completion from Noa’s behavior alone.
-
-Do not mark a guideline as completed based on Noa's response, unless it is clear that the response was a direct result of the psychologist’s prior intervention.
-
-If the guideline was completed by Noa without any help or prompting from the psychologist, please do not mark it as completed.
-
+Focused scoring rule:
+Guideline #1 – Identify the conflict and provide initial validation
+Mark as completed only if the therapist’s message clearly includes both:
+(1) reflection of a specific emotion of Noa (e.g., hurt, frustrated, disappointed, angry, sad, anxious), and
+(2) explicit validation of the emotion/experience (e.g., “That makes sense,” “That’s understandable,” “That’s natural,” “That can really hurt.”, "That's hard.")
