@@ -530,6 +530,17 @@ def render_screen():
     current_lang = st.session_state.get("language", "en")
     set_page_direction(current_lang) # Apply RTL/LTR styling
 
+    # Stable placeholder for audio playback so the element tree stays consistent across reruns
+    audio_placeholder = st.empty()
+    if "pending_audio_playback" in st.session_state:
+        audio_file = st.session_state.pending_audio_playback
+        del st.session_state.pending_audio_playback
+        try:
+            with audio_placeholder:
+                autoplay_audio(audio_file)
+        except Exception as e:
+            st.warning(tr("audio_generation_error", current_lang, error=str(e)))
+
     # Initialize audio iteration count if not present
     if "audio_iteration_count" not in st.session_state:
         st.session_state.audio_iteration_count = 0
@@ -674,22 +685,25 @@ def render_screen():
         st.session_state.pending_user_input = prompt_for_llm
         st.rerun()
 
-    # Phase 2: If locked and pending input, process and unlock
-    if st.session_state.get("input_locked", False) and st.session_state.get("pending_user_input"):
-        prompt_for_llm = st.session_state.pending_user_input
+    # Determine if we're in Phase 2 before rendering
+    is_phase2 = st.session_state.get("input_locked", False) and st.session_state.get("pending_user_input")
+    phase2_prompt = None
+    if is_phase2:
+        phase2_prompt = st.session_state.pending_user_input
         del st.session_state.pending_user_input
-        # Process the conversation and display in the conversation container
-        with conversation_container:
-            for message in st.session_state.messages:
-                with st.chat_message(message["role"]):
-                    st.markdown(message["content"])
-            st.session_state.messages.append({"role": "user", "content": prompt_for_llm})
-            with st.chat_message("user"):
-                st.markdown(prompt_for_llm)
-            if st.session_state.start_time is None:
-                st.session_state.start_time = time.time()
-            if st.session_state.step_start_time is None:
-                st.session_state.step_start_time = time.time()
+        st.session_state.messages.append({"role": "user", "content": phase2_prompt})
+        if st.session_state.start_time is None:
+            st.session_state.start_time = time.time()
+        if st.session_state.step_start_time is None:
+            st.session_state.step_start_time = time.time()
+
+    # Single entry into conversation_container for all rendering
+    with conversation_container:
+        for message in st.session_state.messages:
+            with st.chat_message(message["role"]):
+                st.markdown(message["content"])
+
+        if is_phase2:
             stream = client.chat.completions.create(
                 model=config.BASIC_CHAT_MODEL,
                 messages=[{"role": "system", "content": st.session_state.system_prompt}] + st.session_state.messages,
@@ -697,45 +711,46 @@ def render_screen():
             )
             with st.chat_message("assistant"):
                 response = st.write_stream(stream)
+
             st.session_state.messages.append({"role": "assistant", "content": response})
+
             guidelines_promise = start_promise(evaluate_guidelines, st.session_state.to_dict())
             tip_promise = start_promise(get_director_tip, st.session_state.to_dict())
+            audio_promise = None
             if st.session_state.voice:
-                with st.spinner(tr("generating_audio_spinner", current_lang)):
-                    audio_file = text_to_speech(response)
-                    if audio_file:
-                        autoplay_audio(audio_file)
-                    else:
-                        st.warning(tr("audio_generation_error", current_lang, error="Failed to generate audio file path."))
-            completed_guidelines_list, new_state_dict_from_eval = guidelines_promise.result() 
-            tip_text = tip_promise.result()
-            logic_keys_managed_by_evaluate_guidelines = [
-                "guidelines", "current_stage", "step_times", "step_user_messages_amount", "done", "running", "end_time", "completed_guidelines"
-            ]
-            for key_to_update in logic_keys_managed_by_evaluate_guidelines:
-                if key_to_update in new_state_dict_from_eval:
-                    st.session_state[key_to_update] = new_state_dict_from_eval[key_to_update]
-            if completed_guidelines_list:
-                st.session_state.rounds_since_last_completion = 0
-            else:
-                st.session_state.rounds_since_last_completion += 1
-            for guideline in completed_guidelines_list:
-                add_to_sidebar(tr("guideline_completed_sidebar", current_lang, guideline=guideline), message_type='guideline')
-            if st.session_state.rounds_since_last_completion > 0 and tip_text:
-                add_to_sidebar(tip_text, message_type='tip')
-            
-            # Save session data incrementally after each interaction
-            save_session_incrementally("ongoing")
-            
-            st.session_state.input_locked = False
-            st.rerun()
+                audio_promise = start_promise(text_to_speech, response)
 
-    # If not in phase 2, and not processing, show conversation as usual
-    if not st.session_state.get("input_locked", False) and not st.session_state.get("pending_user_input"):
-        with conversation_container:
-            for message in st.session_state.messages:
-                with st.chat_message(message["role"]):
-                    st.markdown(message["content"])
+            with st.spinner(tr("generating_audio_spinner", current_lang)):
+                completed_guidelines_list, new_state_dict_from_eval = guidelines_promise.result()
+                tip_text = tip_promise.result()
+                audio_file = audio_promise.result() if audio_promise else None
+
+    if is_phase2:
+        logic_keys_managed_by_evaluate_guidelines = [
+            "guidelines", "current_stage", "step_times", "step_user_messages_amount", "done", "running", "end_time", "completed_guidelines"
+        ]
+        for key_to_update in logic_keys_managed_by_evaluate_guidelines:
+            if key_to_update in new_state_dict_from_eval:
+                st.session_state[key_to_update] = new_state_dict_from_eval[key_to_update]
+
+        if completed_guidelines_list:
+            st.session_state.rounds_since_last_completion = 0
+        else:
+            st.session_state.rounds_since_last_completion += 1
+
+        for guideline in completed_guidelines_list:
+            add_to_sidebar(tr("guideline_completed_sidebar", current_lang, guideline=guideline), message_type='guideline')
+
+        if st.session_state.rounds_since_last_completion > 0 and tip_text:
+            add_to_sidebar(tip_text, message_type='tip')
+
+        if audio_file:
+            st.session_state.pending_audio_playback = audio_file
+
+        save_session_incrementally("ongoing")
+
+        st.session_state.input_locked = False
+        st.rerun()
 
 def render_end_screen():
     current_lang = st.session_state.get("language", "en")
