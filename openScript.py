@@ -747,7 +747,11 @@ def render_screen():
         if audio_file:
             st.session_state.pending_audio_playback = audio_file
 
-        save_session_incrementally("ongoing")
+        # Save with appropriate status based on whether all goals are completed
+        if st.session_state.done:
+            save_session_incrementally("completed")
+        else:
+            save_session_incrementally("ongoing")
 
         st.session_state.input_locked = False
         st.rerun()
