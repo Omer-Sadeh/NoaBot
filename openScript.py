@@ -425,6 +425,7 @@ def end_session():
     
     # Save final session data when manually ended
     save_session_incrementally("completed")
+    st.session_state.session_saved = True  # Prevent render_end_screen from saving again
 
 def text_to_speech(input_text):
     temp_dir = Path("temp_audio")
@@ -750,6 +751,7 @@ def render_screen():
         # Save with appropriate status based on whether all goals are completed
         if st.session_state.done:
             save_session_incrementally("completed")
+            st.session_state.session_saved = True  # Prevent render_end_screen from saving again
         else:
             save_session_incrementally("ongoing")
 
@@ -903,6 +905,13 @@ Conversation Transcript: \n\
         # Use a fixed document ID for ongoing sessions, create new for completed
         doc_id = "current" if status == "ongoing" else f"final_{int(time.time())}"
         
+        # Delete ongoing document BEFORE creating final to avoid duplicate entries in database view
+        if status == "completed":
+            try:
+                db.collection("sessions").document(session_id).collection("conversations").document("current").delete()
+            except Exception:
+                pass  # Ignore if current document doesn't exist
+        
         db.collection("sessions").document(session_id).collection("conversations").document(doc_id).set({
             "timestamp": firestore.SERVER_TIMESTAMP,
             "data": save_data,
@@ -914,13 +923,6 @@ Conversation Transcript: \n\
             "completed_guidelines": st.session_state.get('completed_guidelines', 0),
             "current_stage": st.session_state.get('current_stage', 0)
         }, merge=True)
-        
-        # Delete the ongoing session document when saving completed session
-        if status == "completed":
-            try:
-                db.collection("sessions").document(session_id).collection("conversations").document("current").delete()
-            except Exception:
-                pass  # Ignore if current document doesn't exist
         
         return True
     except Exception as e:

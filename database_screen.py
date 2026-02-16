@@ -29,9 +29,11 @@ def backfill_sessions(db):
 
 def get_session_status(conv):
     """Determine session status from conversation data"""
-    # Check new format first
+    # Check new format first (status or completed field)
     if "status" in conv:
         return conv["status"]
+    if conv.get("completed") is True:
+        return "completed"
     
     # Fallback to analyzing data content for backward compatibility
     data = conv.get("data", "")

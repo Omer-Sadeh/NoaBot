@@ -519,8 +519,10 @@ def save_closed_session_incrementally(status="ongoing"):
         is_successful = session_finished and correct == total
 
         # Prepare save_data (transcript and stats)
+        # Session Completed = user finished the script; Closed Script Completed = all answers correct
         save_data = f"""\
 Status: {status}\n\
+Session Completed: {session_finished}\n\
 Closed Script Completed: {is_successful}\n\
 Number of questions: {total}\n\
 Number of correct answers: {correct}\n\
@@ -553,24 +555,25 @@ Current Stage: {current_stage}\n\
         # Use a fixed document ID for ongoing sessions, create new for completed
         doc_id = "current" if status == "ongoing" else f"final_{int(time.time())}"
         
+        # Delete ongoing document BEFORE creating final to avoid duplicate entries in database view
+        if status == "completed":
+            try:
+                db.collection("sessions").document(session_id).collection("conversations").document("current").delete()
+            except Exception:
+                pass  # Ignore if current document doesn't exist
+        
         db.collection("sessions").document(session_id).collection("conversations").document(doc_id).set({
             "timestamp": firestore.SERVER_TIMESTAMP,
             "data": save_data,
             "mode": "closed",
             "status": status,
+            "completed": session_finished,
             "is_successful": is_successful,
             "session_finished": session_finished,
             "current_stage": current_stage,
             "total_questions": total,
             "correct_answers": correct
         }, merge=True)
-        
-        # Delete the ongoing session document when saving completed session
-        if status == "completed":
-            try:
-                db.collection("sessions").document(session_id).collection("conversations").document("current").delete()
-            except Exception:
-                pass  # Ignore if current document doesn't exist
         
         return True
     except Exception as e:
