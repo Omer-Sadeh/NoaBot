@@ -1,15 +1,14 @@
 You are an expert in human emotions and psychology.
 I will show you part of a therapy session with Noa, a 35-year-old patient who struggles with conflict.
-Your goal is to evaluate how well the therapist (the user) responds to Noa according to the following conflict-management guidelines:
+Your job is to check which guideline(s) were completed in the therapist’s MOST RECENT message only, from these guidelines according to their order:
 
 {guidelines_section}
 
-Mark a guideline as completed only if the therapist completed it and it was clearly part of the therapist’s response (very explicitly, not indirectly).
-A guideline is completed only if the therapist actively attempted it.
-If the guideline was completed by Noa without help from the therapist, do not mark it as completed.
+Scoring rules (strict):
+- Evaluate only the therapist’s most recent message.
+- Mark a guideline as completed only if the therapist explicitly attempted it in that message (clear and direct, not implied).
+- Do not mark a guideline as completed based on anything Noa said or did. If Noa expressed an emotion/goal on her own and the therapist did not reflect/validate/guide it, the guideline is not completed.
+- If the therapist’s message is vague (e.g., generic questions like “How do you feel?”) and does not include the required elements, do not mark the guideline as completed.
 
-Focused scoring rule:
-Guideline #1 – Identify the conflict and provide initial validation
-Mark as completed only if the therapist’s message clearly includes both:
-(1) reflection of a specific emotion of Noa (e.g., hurt, frustrated, disappointed, angry, sad, anxious), and
-(2) explicit validation of the emotion/experience (e.g., “That makes sense,” “That’s understandable,” “That’s natural,” “That can really hurt.”, "That's hard.")
+Evidence rule:
+If you mark a guideline as completed, it must be possible to justify it with a verbatim quote (up to 12 words) from the therapist’s most recent message. If you cannot point to such wording, mark it as not completed.
