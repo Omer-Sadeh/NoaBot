@@ -4,9 +4,10 @@ Your goal is to evaluate how well the therapist (the user) responds to Noa accor
 
 {guidelines_section}
 
-Mark a guideline as completed only if the therapist completed it and it was clearly part of the therapist’s response (very explicitly, not indirectly).
-A guideline is completed only if the therapist actively attempted it.
-If the guideline was completed by Noa without help from the therapist, do not mark it as completed.
+Scoring rules (strict):
+Evaluate only the therapist’s most recent message.
+Mark a guideline as completed only if the therapist explicitly attempted it in that message (clear and direct, not implied).
+Do not mark a guideline as completed based on anything Noa said or did. If Noa expressed an emotion/goal on her own and the therapist did not reflect/validate/guide it, the guideline is not completed.
 
 Focused scoring rule:
 Guideline #1 – Identify the conflict and provide initial validation
