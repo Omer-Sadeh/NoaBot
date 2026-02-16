@@ -4,10 +4,14 @@ Your goal is to evaluate how well the therapist (the user) responds to Noa accor
 
 {guidelines_section}
 
-SCORING RULES (STRICT):
-- Evaluate ONLY the therapist’s MOST RECENT message.
-- Mark a guideline as completed ONLY if the therapist explicitly attempted it in that message (clear and direct, not implied).
-- Do NOT mark a guideline as completed based on anything Noa said or did. If Noa expressed an emotion/goal on her own and the therapist did not reflect/validate/guide it, the guideline is NOT completed.
+Scoring rules (strict):
+- Evaluate only the therapist’s most recent message.
+- Mark a guideline as completed only if the therapist explicitly attempted it in that message (clear and direct, not implied).
+- Do not mark a guideline as completed based on anything Noa said or did. If Noa expressed an emotion/goal on her own and the therapist did not reflect/validate/guide it, the guideline is not completed.
+- If the therapist’s message is vague (e.g., generic questions like “How do you feel?”) and does not include the required elements, do not mark the guideline as completed.
+
+Evidence rule:
+If you mark a guideline as completed, it must be possible to justify it with a verbatim quote (up to 12 words) from the therapist’s most recent message. If you cannot point to such wording, mark it as not completed.
 
 GUIDELINE-SPECIFIC CHECKS:
 - Guideline 1 (Reflect and validate Noa’s initial emotional reaction).
