@@ -5,10 +5,10 @@
     [
         "Help Noa identify and make sense of the emotions involved in the conflict.",
         "Explore Noa’s typical coping pattern in conflicts - (e.g., avoid, appease, escalate).",
-        "Defining a goal for the conflict - Did the therapist (user) help Noa define a goal for the conversation with Dana?"
+        "Clarify Noa’s goal for an upcoming conversation with Dana."
     ],
     [
-        "Practicing assertive communication - Did the therapist (user) prompt Noa to practice formulating an assertive message for the conversation?",
-        "Creating a compromise or summary that supports a healthy resolution - Did the therapist assist Noa in drawing conclusions and considering a compromise?"
+        "Practicing assertive communication for the conversation - prompting Noa to practice formulating an assertive message for the conversation",
+        "Creating a compromise or summary that supports a healthy resolution."
     ]
 ] 
