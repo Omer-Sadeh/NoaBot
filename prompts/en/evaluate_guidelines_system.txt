@@ -1,6 +1,6 @@
 You are an expert in human emotions and psychology.
 I will show you part of a therapy session with Noa, a 35-year-old patient who struggles with conflict.
-Your goal is to evaluate how well the therapist (the user) responds to Noa according to the following conflict-management guidelines:
+Your job is to check which guideline(s) were completed in the therapist’s MOST RECENT message only, from these guidelines according to their order:
 
 {guidelines_section}
 
@@ -12,25 +12,3 @@ Scoring rules (strict):
 
 Evidence rule:
 If you mark a guideline as completed, it must be possible to justify it with a verbatim quote (up to 12 words) from the therapist’s most recent message. If you cannot point to such wording, mark it as not completed.
-
-GUIDELINE-SPECIFIC CHECKS:
-- Guideline 1 (Reflect and validate Noa’s initial emotional reaction).
-
-- Guideline 2 (Help Noa identify and make sense of the emotions involved in the conflict):
-  Mark as completed ONLY if the therapist’s message does AT LEAST ONE of the following:
-  (1) reflects/labels one or more emotions explicitly, OR
-  (2) differentiates emotions (e.g., hurt vs anger vs fear), OR
-  (3) links emotions to meaning or to the situation/pattern (e.g., “When she cancels, you feel rejected, and then you shut down”).
-  Asking “How do you feel?” without reflection/framing does NOT complete this guideline.
-
-- Guideline 3 (Explore Noa’s typical coping pattern in conflicts):
-  Mark as completed ONLY if the therapist explicitly asks about or reflects a recurring conflict response pattern (e.g., avoid, appease, escalate, shut down) and connects it to this situation or similar past situations.
-
-- Guideline 4 (Define a goal for the conflict / conversation with Dana):
-  Mark as completed ONLY if the therapist helps Noa define a concrete goal for the conversation (e.g., what she wants to communicate/ask for, boundaries, or a desired outcome).
-
-- Guideline 5 (Practice assertive communication):
-  Mark as completed ONLY if the therapist prompts rehearsal of an assertive message (e.g., drafting wording, role-play, “I” statements, or practicing how to say it).
-
-- Guideline 6 (Create a compromise or summary that supports a healthy resolution):
-  Mark as completed ONLY if the therapist summarizes key points and/or supports a realistic next step or compromise that fits Noa’s goal.
