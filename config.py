@@ -49,3 +49,7 @@ TRANSCRIPTION_MODEL = "gpt-4o-transcribe"
 # 1. closed script: Text-to-speech generation
 # 2. open script: Text-to-speech generation
 TTS_MODEL = "gpt-4o-mini-tts"
+
+# --- Feature Flags ---
+ENABLE_LANGUAGE_SWITCHER = False
+DEFAULT_LANGUAGE = "en"

@@ -257,7 +257,7 @@ def reset_session():
 
     st.session_state.voice = True
     if "language" not in st.session_state:
-        st.session_state.language = "en"
+        st.session_state.language = config.DEFAULT_LANGUAGE
 
     # Add a unique session_id if not already present
     if "session_id" not in st.session_state:
@@ -479,7 +479,7 @@ def autoplay_audio(file_path):
 
 def setup_env():
     if "language" not in st.session_state:
-        st.session_state.language = "en"
+        st.session_state.language = config.DEFAULT_LANGUAGE
     if "translations" not in st.session_state or st.session_state.get("translations_lang") != st.session_state.language:
         st.session_state.translations = load_translations(st.session_state.language)
         st.session_state.translations_lang = st.session_state.language
@@ -556,21 +556,21 @@ def render_screen():
         st.rerun()
 
     st.sidebar.title(tr("tips_progress", current_lang))
-    
-    lang_options = {"English": "en", "עברית": "he"}
-    # Get current language index for selectbox
-    lang_keys = list(lang_options.keys())
-    lang_values = list(lang_options.values())
-    current_lang_display_name = lang_keys[lang_values.index(current_lang)]
 
-    selected_lang_key = st.sidebar.selectbox(
-        tr("language_label", current_lang), # This label is bilingual by design in the selectbox
-        options=lang_keys,
-        index=lang_keys.index(current_lang_display_name) # Ensure correct display name is selected
-    )
+    if config.ENABLE_LANGUAGE_SWITCHER:
+        lang_options = {"English": "en", "עברית": "he"}
+        lang_keys = list(lang_options.keys())
+        lang_values = list(lang_options.values())
+        current_lang_display_name = lang_keys[lang_values.index(current_lang)]
 
-    if lang_options[selected_lang_key] != current_lang:
-        set_language(lang_options[selected_lang_key])
+        selected_lang_key = st.sidebar.selectbox(
+            tr("language_label", current_lang),
+            options=lang_keys,
+            index=lang_keys.index(current_lang_display_name)
+        )
+
+        if lang_options[selected_lang_key] != current_lang:
+            set_language(lang_options[selected_lang_key])
 
     any_tips_removed = False
     if "sidebar_messages" in st.session_state:

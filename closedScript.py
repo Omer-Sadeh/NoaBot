@@ -68,7 +68,7 @@ def set_page_direction(lang: str = None):
 
 def setup_env_closed():
     if "language" not in st.session_state:
-        st.session_state.language = "en"
+        st.session_state.language = config.DEFAULT_LANGUAGE
     if "closed_stage" not in st.session_state:
         st.session_state.closed_stage = 0
     if "closed_feedback" not in st.session_state:
@@ -239,26 +239,27 @@ def render_closed_screen():
     # --- UI rendering starts here ---
     st.title(tr("app_title", current_lang))
     st.write(tr("app_subtitle_closed", current_lang))
-    lang_options = {"English": "en", "עברית": "he"}
-    lang_keys = list(lang_options.keys())
-    lang_values = list(lang_options.values())
-    try:
-        current_lang_display_name = lang_keys[lang_values.index(current_lang)]
-    except ValueError:
-        current_lang_display_name = lang_keys[0]
-    try:
-        selectbox_index = lang_keys.index(current_lang_display_name)
-    except ValueError:
-        selectbox_index = 0
-    selected_lang_key = st.sidebar.selectbox(
-        tr("language_label", current_lang),
-        options=lang_keys,
-        index=selectbox_index,
-        key="closed_lang_select"
-    )
-    if lang_options[selected_lang_key] != current_lang:
-        set_language_closed(lang_options[selected_lang_key])
-        st.stop()
+    if config.ENABLE_LANGUAGE_SWITCHER:
+        lang_options = {"English": "en", "עברית": "he"}
+        lang_keys = list(lang_options.keys())
+        lang_values = list(lang_options.values())
+        try:
+            current_lang_display_name = lang_keys[lang_values.index(current_lang)]
+        except ValueError:
+            current_lang_display_name = lang_keys[0]
+        try:
+            selectbox_index = lang_keys.index(current_lang_display_name)
+        except ValueError:
+            selectbox_index = 0
+        selected_lang_key = st.sidebar.selectbox(
+            tr("language_label", current_lang),
+            options=lang_keys,
+            index=selectbox_index,
+            key="closed_lang_select"
+        )
+        if lang_options[selected_lang_key] != current_lang:
+            set_language_closed(lang_options[selected_lang_key])
+            st.stop()
     entry = script[stage]
     st.header("Noa:")
     st.write(entry["Noa"])

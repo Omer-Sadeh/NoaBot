@@ -1,5 +1,6 @@
 import streamlit as st
 import _version
+import config
 
 from openScript import setup_env, render_screen, render_end_screen
 from closedScript import setup_env_closed, render_closed_screen
@@ -13,9 +14,13 @@ MENU_OPTIONS = ["Open Mode", "Closed Mode", "Database"]
 def pre_game_menu():
     st.title("NoaBot")
     menu_choice = st.selectbox("Choose Option", MENU_OPTIONS, key="menu_select")
-    lang_display = st.selectbox("Choose Language", list(LANGUAGES.keys()), key="lang_select")
+    if config.ENABLE_LANGUAGE_SWITCHER:
+        lang_display = st.selectbox("Choose Language", list(LANGUAGES.keys()), key="lang_select")
     if st.button("Start", key="start_btn"):
-        st.session_state.language = LANGUAGES[lang_display]
+        if config.ENABLE_LANGUAGE_SWITCHER:
+            st.session_state.language = LANGUAGES[lang_display]
+        else:
+            st.session_state.language = config.DEFAULT_LANGUAGE
         if menu_choice == "Database":
             st.session_state.menu_mode = "database"
         else:
