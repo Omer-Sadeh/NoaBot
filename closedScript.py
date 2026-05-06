@@ -282,20 +282,16 @@ def render_closed_screen():
                     # Mark as played even on failure to avoid retry loop
                     st.session_state.audio_played_stage = stage
 
-    # Only show thank you/stats/continue if on last question and NOT answered yet
-    if stage == len(script) - 1 and not st.session_state.get("closed_answered", False):
-        st.success(tr("thank_you_message", current_lang))
-        total_questions = sum(1 for entry in script if "correct_answer" in entry)
-        st.info(tr("closed_stats_message", current_lang, correct=st.session_state.get("closed_correct_count", 0), total=total_questions))
-        if st.button(tr("continue_button", current_lang), key=f"cont_{stage}"):
-            st.session_state.closed_stage += 1
-            st.session_state.closed_feedback = None
-            st.session_state.closed_answered = False
-            st.session_state.closed_selected_key = None
-            st.session_state.closed_selected_idx = None
-            st.session_state.closed_correct_idx = None
-            st.session_state.audio_played_stage = -1
-            st.rerun()
+    # Auto-advance past the last (answer-less) closing stage directly to the end screen
+    if stage == len(script) - 1 and not st.session_state.get("closed_answered", False) and "correct_answer" not in entry:
+        st.session_state.closed_stage += 1
+        st.session_state.closed_feedback = None
+        st.session_state.closed_answered = False
+        st.session_state.closed_selected_key = None
+        st.session_state.closed_selected_idx = None
+        st.session_state.closed_correct_idx = None
+        st.session_state.audio_played_stage = -1
+        st.rerun()
         return
     answers = [
         (entry["correct_answer"], "correct", entry["correct_answer_feedback"]),
