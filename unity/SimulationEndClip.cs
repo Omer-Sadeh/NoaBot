@@ -21,6 +21,12 @@ namespace InceptorEngine.Clips
         [TextArea] [SerializeField] private string _successMessage = "Simulation complete.";
         [SerializeField] private bool _requireContinue = true;
 
+        [Header("Firestore + Redirect")]
+        [SerializeField] private string _mode = "open";
+        [SerializeField] private string _questionnaireUrl = "";
+        [SerializeField] private bool   _uploadToFirestore = true;
+        [SerializeField] private bool   _redirectAfterUpload = true;
+
         private TMP_Text _verdictTMP;
         private bool _hasUserClickedContinue;
 
@@ -47,6 +53,33 @@ namespace InceptorEngine.Clips
             PrintVerdict(_successMessage);
             SetVerdictVisible(true);
 
+            var analyzer = GameObject.FindFirstObjectByType<Analytics.LLMConversationAnalyzer>();
+            var talking  = TalkingClip.Current;
+
+            if (_uploadToFirestore && analyzer != null)
+            {
+                analyzer.Mode = _mode;
+
+                int  completed   = talking != null ? talking.CompletedGuidelines : 0;
+                int  stage       = talking != null ? talking.CurrentStage        : 0;
+                bool isSuccess   = talking != null && talking.IsSuccessful;
+
+                var inceptor = Inceptor.GetAvailableInceptors();
+                if (inceptor != null)
+                {
+                    yield return inceptor.StartCoroutine(
+                        analyzer.SendSessionData(completed, stage, isSuccess, _showDebugLogs));
+                }
+                else if (_showDebugLogs)
+                {
+                    Debug.LogWarning("SimulationEndClip: no Inceptor available, skipping Firestore upload.");
+                }
+            }
+            else if (_uploadToFirestore && _showDebugLogs)
+            {
+                Debug.LogWarning("SimulationEndClip: LLMConversationAnalyzer not found, skipping Firestore upload.");
+            }
+
             SetContinueButtonActive(_requireContinue);
             if (_requireContinue)
             {
@@ -59,6 +92,12 @@ namespace InceptorEngine.Clips
             }
 
             SetContinueButtonActive(false);
+
+            if (_redirectAfterUpload && !string.IsNullOrEmpty(_questionnaireUrl) && analyzer != null)
+            {
+                Application.OpenURL($"{_questionnaireUrl}?pid={analyzer.SessionId}");
+            }
+
             onClipEnd?.Invoke(_nextClip);
         }
 

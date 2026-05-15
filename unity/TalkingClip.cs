@@ -50,6 +50,24 @@ namespace InceptorEngine.Clips
     private static bool _didInitializeGuidelines = false; // session-scoped guard
     private bool _hasUserClickedContinue = false;
 
+    public static TalkingClip Current { get; private set; }
+
+    public int CompletedGuidelines
+    {
+        get
+        {
+            int total = 0, remaining = 0;
+            if (_guidelineSections != null)
+                foreach (var s in _guidelineSections)   total     += s?.Items?.Count ?? 0;
+            if (_remainingGuidelines != null)
+                foreach (var s in _remainingGuidelines) remaining += s?.Items?.Count ?? 0;
+            return total - remaining;
+        }
+    }
+
+    public int  CurrentStage => _activeSectionIndex;
+    public bool IsSuccessful => AreAllGuidelinesCleared();
+
         public override void Build(JObject clipData)
         {
             Debug.Log("TalkingClip Build: initializing from data");
@@ -74,6 +92,7 @@ namespace InceptorEngine.Clips
 
         protected override IEnumerator Run(UnityAction<int> onClipEnd)
         {
+            Current = this;
             InitializeGuidelinesForSession();
             var inceptor = Inceptor.GetAvailableInceptors();
             if (inceptor == null)
@@ -252,6 +271,7 @@ namespace InceptorEngine.Clips
     {
         _didInitialGreeting = false;
         _didInitializeGuidelines = false;
+        Current = null;
     }
 
     private IEnumerator JudgeConversationAsync(Analytics.LLMConversationAnalyzer analyzer, System.Action<string> onVerdict, System.Action onDone)

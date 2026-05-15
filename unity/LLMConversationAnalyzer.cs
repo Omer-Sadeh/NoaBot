@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -23,10 +24,19 @@ namespace InceptorEngine.Analytics // keep under InceptorEngine.* namespace for 
         public string Language = "en";
         [TextArea] public string SystemPrompt = string.Empty;
 
+        [Header("Firebase Settings")]
+        public string FirebaseProjectId = "noabotprompts";
+        public string FirebaseApiKey;
+        public string Mode = "open";
+
+        private string _sessionId;
+        public string SessionId => _sessionId ??= Guid.NewGuid().ToString("N");
+
         private const string OPENAI_TTS_ENDPOINT = "https://api.openai.com/v1/audio/speech";
         private const string OPENAI_CHAT_ENDPOINT = "https://api.openai.com/v1/chat/completions";
         private const string OPENAI_STT_ENDPOINT = "https://api.openai.com/v1/audio/transcriptions";
         private const string OPENAI_RESPONSES_ENDPOINT = "https://api.openai.com/v1/responses";
+        private const string FIRESTORE_BASE = "https://firestore.googleapis.com/v1/projects";
 
         [Serializable]
         public class ChatMessage { public string role; public string content; public ChatMessage(string r,string c){role=r;content=c;} }
@@ -260,6 +270,88 @@ namespace InceptorEngine.Analytics // keep under InceptorEngine.* namespace for 
             writer.Write(intData.Length * 2);
             foreach (var s in intData) writer.Write(s);
             return stream.ToArray();
+        }
+
+        public IEnumerator SendSessionData(int completedGuidelines, int currentStage,
+                                           bool isSuccessful, bool debug = false,
+                                           Action onDone = null)
+        {
+            int userMessageCount = _history.Count(m => m.role == "user");
+            string transcript    = GetTranscript();
+            string now           = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ");
+            string root          = $"{FIRESTORE_BASE}/{FirebaseProjectId}/databases/(default)/documents/sessions_unity";
+
+            string parentUrl  = $"{root}/{SessionId}?key={FirebaseApiKey}";
+            string parentJson =
+                "{\"fields\":{" +
+                $"\"created\":{{\"timestampValue\":\"{now}\"}}," +
+                $"\"last_updated\":{{\"timestampValue\":\"{now}\"}}," +
+                $"\"mode\":{{\"stringValue\":\"{EscapeJson(Mode)}\"}}," +
+                $"\"status\":{{\"stringValue\":\"completed\"}}," +
+                $"\"language\":{{\"stringValue\":\"{EscapeJson(Language)}\"}}" +
+                "}}";
+
+            yield return PatchDocument(parentUrl, parentJson, debug);
+
+            long   epoch   = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+            string convUrl = $"{root}/{SessionId}/conversations/final_{epoch}?key={FirebaseApiKey}";
+            string convJson =
+                "{\"fields\":{" +
+                $"\"timestamp\":{{\"timestampValue\":\"{now}\"}}," +
+                $"\"data\":{{\"stringValue\":\"{EscapeJson(transcript)}\"}}," +
+                $"\"mode\":{{\"stringValue\":\"{EscapeJson(Mode)}\"}}," +
+                $"\"status\":{{\"stringValue\":\"completed\"}}," +
+                $"\"is_successful\":{{\"booleanValue\":{(isSuccessful ? "true" : "false")}}}," +
+                $"\"session_finished\":{{\"booleanValue\":true}}," +
+                $"\"user_message_count\":{{\"integerValue\":\"{userMessageCount}\"}}," +
+                $"\"completed_guidelines\":{{\"integerValue\":\"{completedGuidelines}\"}}," +
+                $"\"current_stage\":{{\"integerValue\":\"{currentStage}\"}}" +
+                "}}";
+
+            yield return PatchDocument(convUrl, convJson, debug);
+
+            if (debug) Debug.Log($"LLMConversationAnalyzer: session {SessionId} saved to Firestore.");
+            onDone?.Invoke();
+        }
+
+        private IEnumerator PatchDocument(string url, string json, bool debug)
+        {
+            using (var req = new UnityWebRequest(url, "PATCH"))
+            {
+                byte[] body = Encoding.UTF8.GetBytes(json);
+                req.uploadHandler   = new UploadHandlerRaw(body);
+                req.downloadHandler = new DownloadHandlerBuffer();
+                req.SetRequestHeader("Content-Type", "application/json");
+
+                yield return req.SendWebRequest();
+
+                if (req.result != UnityWebRequest.Result.Success && debug)
+                    Debug.LogError($"LLMConversationAnalyzer Firestore PATCH failed: {req.error}\n{req.downloadHandler.text}");
+            }
+        }
+
+        private static string EscapeJson(string s)
+        {
+            if (string.IsNullOrEmpty(s)) return "";
+            var sb = new StringBuilder(s.Length);
+            foreach (char c in s)
+            {
+                switch (c)
+                {
+                    case '\"': sb.Append("\\\""); break;
+                    case '\\': sb.Append("\\\\"); break;
+                    case '\b': sb.Append("\\b");  break;
+                    case '\f': sb.Append("\\f");  break;
+                    case '\n': sb.Append("\\n");  break;
+                    case '\r': sb.Append("\\r");  break;
+                    case '\t': sb.Append("\\t");  break;
+                    default:
+                        if (c < 0x20) sb.AppendFormat("\\u{0:x4}", (int)c);
+                        else          sb.Append(c);
+                        break;
+                }
+            }
+            return sb.ToString();
         }
 
         private static string ExtractAssistantText(string rawJson)
