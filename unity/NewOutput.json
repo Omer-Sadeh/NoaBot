@@ -1,0 +1,261 @@
+{
+    "Clips": [
+        {
+            "metadata": {
+                "name": "Clip 0",
+                "camera": 1,
+                "type": "RegularClip",
+                "description": "Default Explaination",
+                "nextClip": 1
+            },
+            "characters": [
+                {
+                    "bodyBehavior": "Talking.anim",
+                    "name": "Nirit",
+                    "text": "מה שלומך היום?  \r",
+                    "isTalking": true,
+                    "mood": "ListenAndThink.anim",
+                    "reaction": "Considering.anim",
+                    "behavior": "Talking.anim"
+                }
+            ]
+        },
+        {
+            "metadata": {
+                "name": "Clip 1",
+                "camera": 1,
+                "type": "QuestionClip",
+                "description": "Default Explaination",
+                "answers": [
+                    "אני בסדר",
+                    "היו ימים טובים יותר",
+                    "לא טוב"
+                ],
+                "nextClips": [
+                    2,
+                    3,
+                    4
+                ],
+                "correctAnswerIndex": 0,
+                "feedback": [
+                    "Default Explaination",
+                    "Default Explaination",
+                    "Default Explaination"
+                ]
+            },
+            "characters": [
+                {
+                    "bodyBehavior": "",
+                    "name": "Nirit",
+                    "text": "",
+                    "isTalking": false,
+                    "mood": "",
+                    "reaction": "",
+                    "behavior": ""
+                }
+            ]
+        },
+        {
+            "metadata": {
+                "name": "Clip 2",
+                "camera": 1,
+                "type": "RegularClip",
+                "correctness": 2,
+                "nextClip": 5
+            },
+            "characters": [
+                {
+                    "bodyBehavior": "",
+                    "name": "Nirit",
+                    "text": "",
+                    "isTalking": false,
+                    "mood": "",
+                    "reaction": "",
+                    "behavior": ""
+                }
+            ]
+        },
+        {
+            "metadata": {
+                "name": "Clip 3",
+                "camera": 1,
+                "type": "RegularClip",
+                "correctness": 2,
+                "nextClip": 5
+            },
+            "characters": [
+                {
+                    "bodyBehavior": "",
+                    "name": "Nirit",
+                    "text": "",
+                    "isTalking": false,
+                    "mood": "",
+                    "reaction": "",
+                    "behavior": ""
+                }
+            ]
+        },
+        {
+            "metadata": {
+                "name": "Clip 4",
+                "camera": 1,
+                "type": "RegularClip",
+                "correctness": 2,
+                "nextClip": 5
+            },
+            "characters": [
+                {
+                    "bodyBehavior": "",
+                    "name": "Nirit",
+                    "text": "",
+                    "isTalking": false,
+                    "mood": "",
+                    "reaction": "",
+                    "behavior": ""
+                }
+            ]
+        },
+        {
+            "metadata": {
+                "name": "Clip 5",
+                "camera": 1,
+                "type": "RegularClip",
+                "description": "Default Explaination",
+                "nextClip": 6
+            },
+            "characters": [
+                {
+                    "bodyBehavior": "",
+                    "name": "Nirit",
+                    "text": "היום הצלחת לעשות כמה דברים?\r",
+                    "isTalking": true,
+                    "mood": "",
+                    "reaction": "",
+                    "behavior": ""
+                }
+            ]
+        },
+        {
+            "metadata": {
+                "name": "Clip 6",
+                "camera": 1,
+                "type": "QuestionClip",
+                "description": "Default Explaination",
+                "answers": [
+                    "כן",
+                    "לא",
+                    "אולי"
+                ],
+                "nextClips": [
+                    7,
+                    8,
+                    9
+                ],
+                "correctAnswerIndex": 0,
+                "feedback": [
+                    "Default Explaination",
+                    "Default Explaination",
+                    "Default Explaination"
+                ]
+            },
+            "characters": [
+                {
+                    "bodyBehavior": "",
+                    "name": "Nirit",
+                    "text": "",
+                    "isTalking": false,
+                    "mood": "",
+                    "reaction": "",
+                    "behavior": ""
+                }
+            ]
+        },
+        {
+            "metadata": {
+                "name": "Clip 7",
+                "camera": 1,
+                "type": "RegularClip",
+                "correctness": 2,
+                "nextClip": 10
+            },
+            "characters": [
+                {
+                    "bodyBehavior": "",
+                    "name": "Nirit",
+                    "text": "",
+                    "isTalking": false,
+                    "mood": "",
+                    "reaction": "",
+                    "behavior": ""
+                }
+            ]
+        },
+        {
+            "metadata": {
+                "name": "Clip 8",
+                "camera": 1,
+                "type": "RegularClip",
+                "correctness": 2,
+                "nextClip": 10
+            },
+            "characters": [
+                {
+                    "bodyBehavior": "",
+                    "name": "Nirit",
+                    "text": "",
+                    "isTalking": false,
+                    "mood": "",
+                    "reaction": "",
+                    "behavior": ""
+                }
+            ]
+        },
+        {
+            "metadata": {
+                "name": "Clip 9",
+                "camera": 1,
+                "type": "RegularClip",
+                "correctness": 2,
+                "nextClip": 10
+            },
+            "characters": [
+                {
+                    "bodyBehavior": "",
+                    "name": "Nirit",
+                    "text": "",
+                    "isTalking": false,
+                    "mood": "",
+                    "reaction": "",
+                    "behavior": ""
+                }
+            ]
+        },
+        {
+            "metadata": {
+                "name": "Clip 10",
+                "camera": 1,
+                "type": "RegularClip",
+                "description": "Default Explaination",
+                "nextClip": -1
+            },
+            "characters": [
+                {
+                    "bodyBehavior": "",
+                    "name": "Nirit",
+                    "text": "עדיף לעשות משהו",
+                    "isTalking": true,
+                    "mood": "",
+                    "reaction": "",
+                    "behavior": ""
+                }
+            ]
+        }
+    ],
+    "Characters": [
+        {
+            "name": "Nirit",
+            "desc": "",
+            "model": ""
+        }
+    ]
+}
