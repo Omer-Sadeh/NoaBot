@@ -39,6 +39,14 @@ if __name__ == "__main__":
         unsafe_allow_html=True
     )
 
+    # Resolve active variant from URL query param (falls back to default)
+    if "team" in st.query_params:
+        team_param = st.query_params["team"]
+        if team_param in config.VARIANTS:
+            st.session_state.variant = team_param
+    if "variant" not in st.session_state:
+        st.session_state.variant = config.DEFAULT_VARIANT
+
     # Check for URL query parameters for direct access
     if "mode" in st.query_params and "lang" in st.query_params and not st.session_state.get("url_params_processed", False):
         mode_param = st.query_params["mode"]

@@ -53,3 +53,25 @@ TTS_MODEL = "gpt-4o-mini-tts"
 # --- Feature Flags ---
 ENABLE_LANGUAGE_SWITCHER = False
 DEFAULT_LANGUAGE = "en"
+
+# --- Variants ---
+# Each variant isolates its data in its own Firestore collection and controls
+# the end-screen action ("questionnaire" link vs. a copyable "session_id").
+DEFAULT_VARIANT = "default"
+
+VARIANTS = {
+    "default": {
+        "collection": "sessions",
+        "end_action": "questionnaire",
+        "questionnaire_url": "https://www.surveymonkey.com/r/NP7M559",
+    },
+    "amber": {
+        "collection": "sessions_amber",
+        "end_action": "session_id",
+        "questionnaire_url": None,
+    },
+}
+
+
+def get_variant(name=None):
+    return VARIANTS.get(name or DEFAULT_VARIANT, VARIANTS[DEFAULT_VARIANT])

@@ -5,6 +5,7 @@ from google.oauth2 import service_account
 import firebase_admin
 from firebase_admin import firestore
 import datetime
+import config
 
 def setup_firestore():
     if not firebase_admin._apps:
@@ -12,16 +13,16 @@ def setup_firestore():
         firebase_admin.initialize_app(cred, {'projectId': 'noabotprompts',})
     return firestore.client()
 
-def backfill_sessions(db):
+def backfill_sessions(db, collection_name):
     # Get all session IDs from conversations subcollections
-    sessions_ref = db.collection("sessions")
+    sessions_ref = db.collection(collection_name)
     conv_session_ids = set()
     for session_ref in sessions_ref.list_documents():
         conv_session_ids.add(session_ref.id)
     # For each session_id, check if parent exists
     missing = []
     for session_id in conv_session_ids:
-        doc_ref = db.collection("sessions").document(session_id)
+        doc_ref = db.collection(collection_name).document(session_id)
         if not doc_ref.get().exists:
             missing.append(session_id)
             doc_ref.set({"created": firestore.SERVER_TIMESTAMP}, merge=True)
@@ -156,15 +157,16 @@ def detect_language_from_data(data):
 def render_database_screen():
     st.title("Saved Conversations Database")
     db = setup_firestore()
+    collection_name = config.get_variant(st.session_state.get("variant"))["collection"]
     # Backfill missing parent session documents automatically
-    backfill_sessions(db)
+    backfill_sessions(db, collection_name)
     conversations = []
-    sessions = list(db.collection("sessions").stream())
+    sessions = list(db.collection(collection_name).stream())
     
     for i, session in enumerate(sessions):
         session_id = session.id
         session_data = session.to_dict()
-        convs = list(db.collection("sessions").document(session_id).collection("conversations").order_by("timestamp", direction=firestore.Query.DESCENDING).stream())
+        convs = list(db.collection(collection_name).document(session_id).collection("conversations").order_by("timestamp", direction=firestore.Query.DESCENDING).stream())
         for j, conv in enumerate(convs):
             data = conv.to_dict()
             # Get language from session data, fallback to detecting from conversation data for legacy sessions

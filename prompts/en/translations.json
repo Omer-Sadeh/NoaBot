@@ -38,5 +38,7 @@
     "try_again_button": "Try Again",
     "closed_stats_message": "You answered {correct} out of {total} correctly.",
     "continue_to_questionnaire_button": "Continue to Questionnaire",
-    "autosave_spinner": "Saving session, please wait..."
+    "autosave_spinner": "Saving session, please wait...",
+    "your_session_id_label": "Your session ID:",
+    "session_id_instructions": "Copy this ID and paste it into the form."
 } 

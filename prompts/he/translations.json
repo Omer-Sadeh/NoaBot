@@ -38,5 +38,7 @@
     "try_again_button": "נסה שוב",
     "closed_stats_message": "ענית נכון על {correct} מתוך {total}.",
     "continue_to_questionnaire_button": "המשך לשאלון",
-    "autosave_spinner": "שומר את הסשן, אנא המתן..."
+    "autosave_spinner": "שומר את הסשן, אנא המתן...",
+    "your_session_id_label": "מזהה הסשן שלך:",
+    "session_id_instructions": "העתק את המזהה הזה והדבק אותו בטופס."
 } 

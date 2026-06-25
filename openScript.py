@@ -826,17 +826,23 @@ Conversation Transcript: \n\
         mime="text/plain"
     )
 
-    # --- Add buttons for new conversation and questionnaire ---
+    # --- Add buttons for new conversation and end action (questionnaire or session id) ---
+    variant = config.get_variant(st.session_state.get("variant"))
     col1, col2 = st.columns(2)
     with col1:
         if st.button(tr("try_again_button", current_lang)):
             reset_session()
             st.rerun()
     with col2:
-        st.link_button(
-            tr("continue_to_questionnaire_button", current_lang),
-            "https://www.surveymonkey.com/r/NP7M559"
-        )
+        if variant["end_action"] == "questionnaire":
+            st.link_button(
+                tr("continue_to_questionnaire_button", current_lang),
+                variant["questionnaire_url"]
+            )
+    if variant["end_action"] == "session_id":
+        st.write(tr("your_session_id_label", current_lang))
+        st.code(st.session_state.get("session_id", ""), language=None)
+        st.write(tr("session_id_instructions", current_lang))
 
 def save_session_incrementally(status="ongoing"):
     """Save current session data to Firestore incrementally"""
@@ -893,8 +899,10 @@ Conversation Transcript: \n\
 {conv_transcript}\n\n\
 --------------------------\n"""
 
+        collection_name = config.get_variant(st.session_state.get("variant"))["collection"]
+
         # Ensure parent session document exists
-        db.collection("sessions").document(session_id).set({
+        db.collection(collection_name).document(session_id).set({
             "created": firestore.SERVER_TIMESTAMP,
             "last_updated": firestore.SERVER_TIMESTAMP,
             "mode": "open",
@@ -908,11 +916,11 @@ Conversation Transcript: \n\
         # Delete ongoing document BEFORE creating final to avoid duplicate entries in database view
         if status == "completed":
             try:
-                db.collection("sessions").document(session_id).collection("conversations").document("current").delete()
+                db.collection(collection_name).document(session_id).collection("conversations").document("current").delete()
             except Exception:
                 pass  # Ignore if current document doesn't exist
         
-        db.collection("sessions").document(session_id).collection("conversations").document(doc_id).set({
+        db.collection(collection_name).document(session_id).collection("conversations").document(doc_id).set({
             "timestamp": firestore.SERVER_TIMESTAMP,
             "data": save_data,
             "mode": "open",
