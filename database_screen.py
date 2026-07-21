@@ -1,4 +1,6 @@
 import streamlit as st
+import csv
+import io
 import json
 import time
 from google.oauth2 import service_account
@@ -6,6 +8,50 @@ import firebase_admin
 from firebase_admin import firestore
 import datetime
 import config
+
+CSV_FIELDNAMES = (
+    "session_id",
+    "doc_id",
+    "timestamp",
+    "session_created",
+    "mode",
+    "status",
+    "is_successful",
+    "session_finished",
+    "session_language",
+    "data",
+)
+FORMULA_PREFIXES = ("=", "+", "-", "@")
+
+
+def csv_cell(value):
+    if value is None:
+        return ""
+
+    if isinstance(value, (datetime.datetime, datetime.date)):
+        value = value.isoformat()
+    else:
+        value = str(value)
+
+    if value.startswith(FORMULA_PREFIXES):
+        return f"'{value}"
+
+    return value
+
+
+def conversations_to_csv(conversations):
+    output = io.StringIO(newline="")
+    writer = csv.DictWriter(output, fieldnames=CSV_FIELDNAMES, lineterminator="\n")
+    writer.writeheader()
+    writer.writerows(
+        {
+            fieldname: csv_cell(conversation.get(fieldname))
+            for fieldname in CSV_FIELDNAMES
+        }
+        for conversation in conversations
+    )
+    return output.getvalue().encode("utf-8-sig")
+
 
 def setup_firestore():
     if not firebase_admin._apps:
@@ -187,6 +233,14 @@ def render_database_screen():
                 "session_language": session_language
             })
     
+    st.download_button(
+        "Download all data (CSV)",
+        data=conversations_to_csv(conversations),
+        file_name=f"conversations_{collection_name}_{time.strftime('%Y%m%d_%H%M%S')}.csv",
+        mime="text/csv",
+        help=f"Download all {len(conversations)} conversations in the active collection.",
+    )
+
     # --- FILTERS ---
     st.sidebar.header("Filters")
     mode_filter = st.sidebar.selectbox("Mode", options=["All", "open", "closed"], index=0)
