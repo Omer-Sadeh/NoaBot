@@ -8,19 +8,7 @@ import firebase_admin
 from firebase_admin import firestore
 import datetime
 import config
-
-CSV_FIELDNAMES = (
-    "session_id",
-    "doc_id",
-    "timestamp",
-    "session_created",
-    "mode",
-    "status",
-    "is_successful",
-    "session_finished",
-    "session_language",
-    "data",
-)
+from conversation_csv import CSV_FIELDNAMES, normalize_conversation
 FORMULA_PREFIXES = ("=", "+", "-", "@")
 
 
@@ -73,43 +61,6 @@ def backfill_sessions(db, collection_name):
             missing.append(session_id)
             doc_ref.set({"created": firestore.SERVER_TIMESTAMP}, merge=True)
     return missing
-
-def get_session_status(conv):
-    """Determine session status from conversation data"""
-    # Check new format first (status or completed field)
-    if "status" in conv:
-        return conv["status"]
-    if conv.get("completed") is True:
-        return "completed"
-    
-    # Fallback to analyzing data content for backward compatibility
-    data = conv.get("data", "")
-    if "Status: " in data:
-        for line in data.split("\n"):
-            if line.startswith("Status: "):
-                return line.replace("Status: ", "").strip()
-    
-    # For legacy sessions, if they exist in the database, they were completed
-    # (since old versions only saved at the end)
-    # Check for any indication this is a legacy completed session
-    if conv.get("mode") == "open":
-        # Legacy open mode sessions - look for end screen indicators
-        if any(indicator in data for indicator in [
-            "Completed:", "Session Duration:", "Number of user messages:", 
-            "Number of Completed Criteria:", "Thank you for participating"
-        ]):
-            return "completed"
-    elif conv.get("mode") == "closed":
-        # Legacy closed mode sessions - look for final results indicators  
-        if any(indicator in data for indicator in [
-            "Closed Script Completed:", "Number of questions:", 
-            "Number of correct answers:", "--- Transcript ---"
-        ]):
-            return "completed"
-    
-    # All legacy sessions in database should be completed
-    # (since incremental saving is new)
-    return "completed"
 
 def detect_language_from_data(data):
     """Detect language from conversation data for legacy sessions"""
@@ -220,18 +171,15 @@ def render_database_screen():
             if session_language == "unknown":
                 session_language = detect_language_from_data(data.get("data", ""))
             
-            conversations.append({
-                "timestamp": data.get("timestamp"),
-                "data": data.get("data", ""),
+            conversations.append(normalize_conversation({
+                **session_data,
+                **data,
                 "session_id": session_id,
                 "doc_id": conv.id,
-                "mode": data.get("mode", "open"),
-                "status": get_session_status(data),
-                "is_successful": data.get("is_successful", None),
-                "session_finished": data.get("session_finished", None),
+                "mode": data.get("mode", session_data.get("mode", "open")),
                 "session_created": session_data.get("created"),
-                "session_language": session_language
-            })
+                "session_language": session_language,
+            }))
     
     st.download_button(
         "Download all data (CSV)",
