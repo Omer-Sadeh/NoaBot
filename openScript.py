@@ -1,4 +1,5 @@
 import base64
+import hashlib
 from pathlib import Path
 
 import streamlit as st
@@ -8,6 +9,7 @@ import concurrent.futures
 import time
 import uuid
 import config
+import _version
 
 from google.oauth2 import service_account
 import json
@@ -123,13 +125,22 @@ def set_page_direction(lang: str = None):
             unsafe_allow_html=True,
         )
 
-if not firebase_admin._apps:
-    cred = service_account.Credentials.from_service_account_info(json.loads(st.secrets["firestore_creds"]))
-    firebase_admin.initialize_app(cred, {'projectId': 'noabotprompts',})
-    
-client = OpenAI(api_key=st.secrets["openai_key"])
 async_context = concurrent.futures.ThreadPoolExecutor()
-db = firestore.client()
+client = None
+db = None
+
+
+def initialize_services():
+    global client, db
+    if not firebase_admin._apps:
+        cred = service_account.Credentials.from_service_account_info(
+            json.loads(st.secrets["firestore_creds"])
+        )
+        firebase_admin.initialize_app(cred, {"projectId": "noabotprompts"})
+    if client is None:
+        client = OpenAI(api_key=st.secrets["openai_key"])
+    if db is None:
+        db = firestore.client()
 
 def check_model_availability():
     """Check if all configured models are available in the OpenAI client"""
@@ -232,14 +243,65 @@ def start_promise(function: callable, *args, **kwargs) -> concurrent.futures.Fut
     global async_context
     return async_context.submit(function, *args, **kwargs)
 
+
+def text_hash(value) -> str:
+    serialized = json.dumps(value, ensure_ascii=False, sort_keys=True)
+    return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
+
+
+def guideline_total(language: str) -> int:
+    return sum(len(section) for section in load_guidelines(language))
+
+
+def elapsed_seconds() -> float | None:
+    start_time = st.session_state.get("start_time")
+    return round(time.time() - start_time, 3) if start_time else None
+
+
+def record_turn(role: str, content: str, input_modality: str | None = None) -> None:
+    st.session_state.turns.append(
+        {
+            "role": role,
+            "content": content,
+            "elapsed_seconds": elapsed_seconds(),
+            "input_modality": input_modality,
+        }
+    )
+
+
+def instrument_metadata(language: str) -> dict:
+    return {
+        "app_version": _version.__version__,
+        "models": {
+            "chat": config.BASIC_CHAT_MODEL,
+            "evaluator": config.ADVANCED_REASONING_MODEL,
+            "transcription": config.TRANSCRIPTION_MODEL,
+        },
+        "prompt_hash": text_hash(load_prompt(tr("system_prompt_file", language), language)),
+        "guidelines_hash": text_hash(load_guidelines(language)),
+    }
+
 def reset_session():
-    st.session_state.messages = [
-        {"role": "assistant", "content": load_prompt(tr("initial_message_prompt_file"), st.session_state.get("language", "en"))}
+    language = st.session_state.get("language", "en")
+    initial_message = load_prompt(tr("initial_message_prompt_file", language), language)
+    st.session_state.messages = [{"role": "assistant", "content": initial_message}]
+    st.session_state.turns = [
+        {
+            "role": "assistant",
+            "content": initial_message,
+            "elapsed_seconds": None,
+            "input_modality": None,
+        }
     ]
+    st.session_state.attempt_id = str(uuid.uuid4())
     st.session_state.current_stage = 0
-    st.session_state.guidelines = load_guidelines(st.session_state.get("language", "en"))
+    st.session_state.guidelines = load_guidelines(language)
+    st.session_state.guideline_ids = [
+        [f"section_{section_index + 1}_guideline_{guideline_index + 1}" for guideline_index in range(len(section))]
+        for section_index, section in enumerate(st.session_state.guidelines)
+    ]
     st.session_state.rounds_since_last_completion = 0
-    st.session_state.system_prompt = load_prompt(tr("system_prompt_file"), st.session_state.get("language", "en"))
+    st.session_state.system_prompt = load_prompt(tr("system_prompt_file"), language)
     st.session_state.done = False
     st.session_state.running = True
 
@@ -247,8 +309,10 @@ def reset_session():
     st.session_state.end_time = None
     st.session_state.step_times = []
     st.session_state.step_start_time = None  # Track the start of each step
-
     st.session_state.step_user_messages_amount = []
+    st.session_state.section_completion_flags = []
+    st.session_state.section_transition_events = []
+    st.session_state.completed_guideline_events = []
 
     st.session_state.completed_guidelines = 0
 
@@ -312,19 +376,31 @@ def evaluate_guidelines(state: dict):
     ).choices[0].message.content
 
     completed_idxs = json.loads(answer)["completed_indexes"]
+    stage_before_completion = state["current_stage"]
     updated_guidelines = []
+    updated_guideline_ids = []
     completed_guidelines = []
+    completed_guideline_events = state.setdefault("completed_guideline_events", [])
 
     for idx, guideline in enumerate(current_guidelines_list):
         if idx + 1 not in completed_idxs:
             updated_guidelines.append(guideline)
+            updated_guideline_ids.append(state["guideline_ids"][stage_before_completion][idx])
         else:
             completed_guidelines.append(guideline.split(" - ")[0])
+            completed_guideline_events.append(
+                {
+                    "guideline_id": state["guideline_ids"][stage_before_completion][idx],
+                    "section": stage_before_completion + 1,
+                    "turn_index": len(state["messages"]) - 1,
+                }
+            )
 
-    state['guidelines'][state['current_stage']] = updated_guidelines
+    state["guidelines"][stage_before_completion] = updated_guidelines
+    state["guideline_ids"][stage_before_completion] = updated_guideline_ids
 
     if len(updated_guidelines) == 0:
-        state['current_stage'] += 1
+        state["current_stage"] += 1
 
         now = time.time()
         # Use step_start_time to calculate step duration
@@ -334,16 +410,28 @@ def evaluate_guidelines(state: dict):
             step_time = 0
         if 'step_times' not in state:
             state['step_times'] = []
-        state['step_times'].append(step_time)
+        state["step_times"].append(step_time)
         # Update step_start_time for the next stage
         state['step_start_time'] = now
 
-        user_messages_amount = len([msg for msg in state['messages'] if msg['role'] == 'user'])
-        for s in state['step_user_messages_amount']:
-            user_messages_amount -= s
-        state['step_user_messages_amount'].append(user_messages_amount)
+        user_messages_amount = len(
+            [message for message in state["messages"] if message["role"] == "user"]
+        )
+        for completed_amount in state["step_user_messages_amount"]:
+            user_messages_amount -= completed_amount
+        state["step_user_messages_amount"].append(user_messages_amount)
+        state.setdefault("section_completion_flags", []).append(True)
+        state.setdefault("section_transition_events", []).append(
+            {
+                "section": stage_before_completion + 1,
+                "completed": True,
+                "elapsed_seconds": round(step_time, 3),
+                "user_turns": user_messages_amount,
+                "turn_index": len(state["messages"]) - 1,
+            }
+        )
 
-        if state['current_stage'] >= len(state['guidelines']):
+        if state["current_stage"] >= len(state["guidelines"]):
             state['done'] = True
             state['running'] = False
             state['end_time'] = time.time()
@@ -395,6 +483,8 @@ def add_to_sidebar(content: str, message_type: str):
     """Adds a message to the persistent sidebar_messages list in session_state."""
     if "sidebar_messages" not in st.session_state:
         st.session_state.sidebar_messages = []
+    if "parent_document_saved" not in st.session_state:
+        st.session_state.parent_document_saved = False
 
     message_id = time.time_ns() # Generate a unique ID for the message
     st.session_state.sidebar_messages.append({'id': message_id, 'type': message_type, 'content': content})
@@ -422,6 +512,26 @@ def end_session():
         else:
             step_time = 0
         st.session_state.step_times.append(step_time)
+        current_section = st.session_state.get("current_stage", 0) + 1
+        completed_turns = sum(st.session_state.get("step_user_messages_amount", []))
+        current_turns = len(
+            [
+                message
+                for message in st.session_state.messages
+                if message["role"] == "user"
+            ]
+        ) - completed_turns
+        st.session_state.step_user_messages_amount.append(current_turns)
+        st.session_state.section_completion_flags.append(False)
+        st.session_state.section_transition_events.append(
+            {
+                "section": current_section,
+                "completed": False,
+                "elapsed_seconds": round(step_time, 3),
+                "user_turns": current_turns,
+                "turn_index": len(st.session_state.messages) - 1,
+            }
+        )
     
     # Save final session data when manually ended
     save_session_incrementally("completed")
@@ -478,6 +588,7 @@ def autoplay_audio(file_path):
 # - Main functions -
 
 def setup_env():
+    initialize_services()
     if "language" not in st.session_state:
         st.session_state.language = config.DEFAULT_LANGUAGE
     if "translations" not in st.session_state or st.session_state.get("translations_lang") != st.session_state.language:
@@ -651,6 +762,7 @@ def render_screen():
 
     # Process any inputs: first audio, then chat input if no audio was processed in this cycle.
     prompt_for_llm = None
+    input_modality = None
 
     if audio_bytes: # If new audio was provided in this script run
         with st.spinner(tr("processing_speech_spinner", current_lang)):
@@ -676,14 +788,17 @@ def render_screen():
     if "pending_audio_transcript" in st.session_state:
         prompt_for_llm = st.session_state.pending_audio_transcript
         del st.session_state.pending_audio_transcript
+        input_modality = "voice"
     elif chat_input_value: # If no audio was processed, use chat input value
         prompt_for_llm = chat_input_value
+        input_modality = "text"
 
     # --- Two-phase input locking logic ---
     # Phase 1: User submits input, lock and rerun
     if not st.session_state.get("input_locked", False) and prompt_for_llm:
         st.session_state.input_locked = True
         st.session_state.pending_user_input = prompt_for_llm
+        st.session_state.pending_input_modality = input_modality
         st.rerun()
 
     # Determine if we're in Phase 2 before rendering
@@ -693,6 +808,11 @@ def render_screen():
         phase2_prompt = st.session_state.pending_user_input
         del st.session_state.pending_user_input
         st.session_state.messages.append({"role": "user", "content": phase2_prompt})
+        record_turn(
+            "user",
+            phase2_prompt,
+            st.session_state.pop("pending_input_modality", "text"),
+        )
         if st.session_state.start_time is None:
             st.session_state.start_time = time.time()
         if st.session_state.step_start_time is None:
@@ -714,6 +834,7 @@ def render_screen():
                 response = st.write_stream(stream)
 
             st.session_state.messages.append({"role": "assistant", "content": response})
+            record_turn("assistant", response)
 
             guidelines_promise = start_promise(evaluate_guidelines, st.session_state.to_dict())
             tip_promise = start_promise(get_director_tip, st.session_state.to_dict())
@@ -728,7 +849,19 @@ def render_screen():
 
     if is_phase2:
         logic_keys_managed_by_evaluate_guidelines = [
-            "guidelines", "current_stage", "step_times", "step_user_messages_amount", "done", "running", "end_time", "completed_guidelines"
+            "guidelines",
+            "guideline_ids",
+            "current_stage",
+            "step_times",
+            "step_start_time",
+            "step_user_messages_amount",
+            "section_completion_flags",
+            "section_transition_events",
+            "completed_guideline_events",
+            "done",
+            "running",
+            "end_time",
+            "completed_guidelines",
         ]
         for key_to_update in logic_keys_managed_by_evaluate_guidelines:
             if key_to_update in new_state_dict_from_eval:
@@ -779,7 +912,7 @@ def render_end_screen():
     user_msgs = len([msg for msg in st.session_state.messages if msg['role'] == 'user'])
     st.write(tr("user_messages_label", current_lang, count=user_msgs))
 
-    total_criteria = 6
+    total_criteria = guideline_total(current_lang)
     completed_criteria_str = f"{st.session_state.completed_guidelines}/{total_criteria}"
     st.write(tr("completed_criteria_label", current_lang, count=completed_criteria_str))
 
@@ -865,7 +998,7 @@ def save_session_incrementally(status="ongoing"):
         duration_str = f"{minutes} {tr('minutes_unit', current_lang)} {seconds} {tr('seconds_unit', current_lang)}"
         
         user_msgs = len([msg for msg in st.session_state.messages if msg['role'] == 'user'])
-        total_criteria = 6
+        total_criteria = guideline_total(current_lang)
         completed_criteria_str = f"{st.session_state.get('completed_guidelines', 0)}/{total_criteria}"
         
         steps_times = st.session_state.get('step_times', [])
@@ -901,14 +1034,17 @@ Conversation Transcript: \n\
 
         collection_name = config.get_variant(st.session_state.get("variant"))["collection"]
 
-        # Ensure parent session document exists
-        db.collection(collection_name).document(session_id).set({
-            "created": firestore.SERVER_TIMESTAMP,
+        parent_reference = db.collection(collection_name).document(session_id)
+        parent_data = {
             "last_updated": firestore.SERVER_TIMESTAMP,
             "mode": "open",
             "status": status,
-            "language": current_lang
-        }, merge=True)
+            "language": current_lang,
+        }
+        if not st.session_state.get("parent_document_saved", False):
+            parent_data["created"] = firestore.SERVER_TIMESTAMP
+            st.session_state.parent_document_saved = True
+        parent_reference.set(parent_data, merge=True)
         
         # Use a fixed document ID for ongoing sessions, create new for completed
         doc_id = "current" if status == "ongoing" else f"final_{int(time.time())}"
@@ -924,12 +1060,37 @@ Conversation Transcript: \n\
             "timestamp": firestore.SERVER_TIMESTAMP,
             "data": save_data,
             "mode": "open",
+            "language": current_lang,
             "status": status,
             "is_successful": is_successful,
             "session_finished": session_finished,
             "user_message_count": user_msgs,
             "completed_guidelines": st.session_state.get('completed_guidelines', 0),
-            "current_stage": st.session_state.get('current_stage', 0)
+            "current_stage": st.session_state.get('current_stage', 0),
+            "schema_version": 2,
+            "attempt_id": st.session_state.get("attempt_id"),
+            "turns": st.session_state.get("turns", []),
+            "duration_seconds": round(elapsed_time, 3),
+            "attempt_started_at_epoch": st.session_state.get("start_time"),
+            "section_durations_seconds": [
+                round(value, 3)
+                for value in st.session_state.get("step_times", [])
+            ],
+            "section_time_semantics": "per_section_v2",
+            "section_user_turns": st.session_state.get(
+                "step_user_messages_amount", []
+            ),
+            "section_completion_flags": st.session_state.get(
+                "section_completion_flags", []
+            ),
+            "section_transition_events": st.session_state.get(
+                "section_transition_events", []
+            ),
+            "completed_guideline_events": st.session_state.get(
+                "completed_guideline_events", []
+            ),
+            "guidelines_total": total_criteria,
+            "instrument": instrument_metadata(current_lang),
         }, merge=True)
         
         return True

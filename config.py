@@ -40,6 +40,9 @@ BASIC_CHAT_MODEL = "gpt-5-mini"
 # 2. open script: Generating advice for the user
 ADVANCED_REASONING_MODEL = "gpt-5-mini"
 
+# Used for cached semantic reference metrics on the Analysis screen.
+EMBEDDING_MODEL = "text-embedding-3-large"
+
 # Used for:
 # 1. closed script: Audio transcription
 # 2. open script: Audio transcription

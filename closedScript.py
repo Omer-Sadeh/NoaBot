@@ -1,7 +1,6 @@
 import random
 import streamlit as st
 import json
-import os
 from google.oauth2 import service_account
 import firebase_admin
 from firebase_admin import firestore
@@ -12,18 +11,20 @@ import base64
 from pathlib import Path
 from openai import OpenAI
 import config
+from script_loader import load_closed_script
 
-if not firebase_admin._apps:
-    cred = service_account.Credentials.from_service_account_info(json.loads(st.secrets["firestore_creds"]))
-    firebase_admin.initialize_app(cred, {'projectId': 'noabotprompts',})
-client = OpenAI(api_key=st.secrets["openai_key"]) 
+client = None
 
-def load_closed_script(language: str = "en"):
-    file_path = f"script/{language}.json"
-    if not os.path.exists(file_path):
-        file_path = "script/en.json"
-    with open(file_path, "r", encoding="utf-8") as f:
-        return json.load(f)
+
+def initialize_services():
+    global client
+    if not firebase_admin._apps:
+        cred = service_account.Credentials.from_service_account_info(
+            json.loads(st.secrets["firestore_creds"])
+        )
+        firebase_admin.initialize_app(cred, {"projectId": "noabotprompts"})
+    if client is None:
+        client = OpenAI(api_key=st.secrets["openai_key"])
 
 def tr(key: str, lang: str = None, **kwargs) -> str:
     if lang is None:
@@ -67,6 +68,7 @@ def set_page_direction(lang: str = None):
         )
 
 def setup_env_closed():
+    initialize_services()
     if "language" not in st.session_state:
         st.session_state.language = config.DEFAULT_LANGUAGE
     if "closed_stage" not in st.session_state:
@@ -304,8 +306,6 @@ def render_closed_screen():
         (entry["incorrect_answer_1"], "incorrect1", entry["incorrect_answer_1_feedback"]),
         (entry["incorrect_answer_2"], "incorrect2", entry["incorrect_answer_2_feedback"]),
     ]
-    import random
-    random.seed(stage)
     random.shuffle(answers)
     # --- AUDIO OPTION LOGIC ---
     if "audio_iteration_count" not in st.session_state:

@@ -5,11 +5,12 @@ import config
 from openScript import setup_env, render_screen, render_end_screen
 from closedScript import setup_env_closed, render_closed_screen
 from database_screen import render_database_screen
+from analysis_screen import render_analysis_screen
 
 GAME_MODES = {"Open Mode": "open", "Closed Mode": "closed"}
 LANGUAGES = {"English": "en", "עברית": "he"}
 
-MENU_OPTIONS = ["Open Mode", "Closed Mode", "Database"]
+MENU_OPTIONS = ["Open Mode", "Closed Mode", "Database", "Analysis"]
 
 def pre_game_menu():
     st.title("NoaBot")
@@ -21,8 +22,8 @@ def pre_game_menu():
             st.session_state.language = LANGUAGES[lang_display]
         else:
             st.session_state.language = config.DEFAULT_LANGUAGE
-        if menu_choice == "Database":
-            st.session_state.menu_mode = "database"
+        if menu_choice in {"Database", "Analysis"}:
+            st.session_state.menu_mode = menu_choice.lower()
         else:
             st.session_state.menu_mode = "game"
             st.session_state.game_mode = GAME_MODES[menu_choice]
@@ -53,7 +54,7 @@ if __name__ == "__main__":
         lang_param = st.query_params["lang"]
         
         # Validate parameters
-        valid_modes = ["open", "closed", "database"]
+        valid_modes = ["open", "closed", "database", "analysis"]
         valid_langs = ["en", "he"]
         
         if mode_param in valid_modes and lang_param in valid_langs:
@@ -61,8 +62,8 @@ if __name__ == "__main__":
             st.session_state.language = lang_param
             # Also set language query param for consistency with language changes
             st.query_params["language"] = lang_param
-            if mode_param == "database":
-                st.session_state.menu_mode = "database"
+            if mode_param in {"database", "analysis"}:
+                st.session_state.menu_mode = mode_param
             else:
                 st.session_state.game_mode = mode_param
                 st.session_state.menu_mode = "game"
@@ -75,6 +76,8 @@ if __name__ == "__main__":
     else:
         if st.session_state.get("menu_mode") == "database":
             render_database_screen()
+        elif st.session_state.get("menu_mode") == "analysis":
+            render_analysis_screen()
         else:
             GAME_MODE = st.session_state.get("game_mode", "open")
             LANGUAGE = st.session_state.get("language", "he")

@@ -23,6 +23,8 @@ CSV_FIELDNAMES = (
     "time_on_each_step",
     "tips_shown",
     "current_stage",
+    "attempt_id",
+    "schema_version",
     "total_questions",
     "correct_answers",
     "session_language",
@@ -97,7 +99,14 @@ def normalize_conversation(conversation):
         if mode == "closed"
         else None
     )
-    transcript, turns = parse_transcript(data)
+    structured_turns = normalized_structured_turns(conversation.get("turns"))
+    transcript, parsed_turns = parse_transcript(data)
+    turns = structured_turns or parsed_turns
+    if structured_turns:
+        transcript = "\n\n".join(
+            f"{'Noa' if role == 'noa' else 'User'}: {content}"
+            for role, content in structured_turns
+        )
     noa_messages = [content for role, content in turns if role == "noa"]
     user_messages = [content for role, content in turns if role == "user"]
 
@@ -112,7 +121,10 @@ def normalize_conversation(conversation):
         "closed_script_completed": closed_script_completed,
         "is_successful": is_successful,
         "session_duration": metadata.get("session_duration"),
-        "session_duration_seconds": duration_seconds(metadata.get("session_duration")),
+        "session_duration_seconds": first_value(
+            conversation.get("duration_seconds"),
+            duration_seconds(metadata.get("session_duration")),
+        ),
         "user_message_count": first_value(
             conversation.get("user_message_count"),
             integer_value(metadata.get("user_message_count")),
@@ -128,6 +140,8 @@ def normalize_conversation(conversation):
             conversation.get("current_stage"),
             integer_value(metadata.get("current_stage")),
         ),
+        "attempt_id": conversation.get("attempt_id"),
+        "schema_version": conversation.get("schema_version"),
         "total_questions": first_value(
             conversation.get("total_questions"),
             integer_value(metadata.get("total_questions")),
@@ -141,6 +155,43 @@ def normalize_conversation(conversation):
         "noa_messages": json.dumps(noa_messages, ensure_ascii=False),
         "user_messages": json.dumps(user_messages, ensure_ascii=False),
         "data": data,
+        "turns": [
+            {
+                "role": role,
+                "content": content,
+                **(
+                    {"elapsed_seconds": turn.get("elapsed_seconds")}
+                    if isinstance(turn, dict) and "elapsed_seconds" in turn
+                    else {}
+                ),
+                **(
+                    {"input_modality": turn.get("input_modality")}
+                    if isinstance(turn, dict) and "input_modality" in turn
+                    else {}
+                ),
+            }
+            for turn, (role, content) in zip(
+                conversation.get("turns", []) if structured_turns else turns,
+                turns,
+            )
+        ],
+        "section_durations_seconds": first_value(
+            conversation.get("section_durations_seconds"),
+            parsed_step_durations(metadata.get("time_on_each_step")),
+        ),
+        "section_time_semantics": conversation.get(
+            "section_time_semantics",
+            "cumulative_legacy"
+            if metadata.get("time_on_each_step")
+            else None,
+        ),
+        "section_transition_events": conversation.get("section_transition_events", []),
+        "section_user_turns": conversation.get("section_user_turns", []),
+        "section_completion_flags": conversation.get("section_completion_flags", []),
+        "completed_guideline_events": conversation.get(
+            "completed_guideline_events", []
+        ),
+        "instrument": conversation.get("instrument", {}),
     }
 
 
@@ -192,6 +243,26 @@ def parse_transcript(data):
             for role, content in turns
         )
     return transcript.strip(), turns
+
+
+def normalized_structured_turns(turns):
+    if not isinstance(turns, list):
+        return []
+    normalized = []
+    for turn in turns:
+        if not isinstance(turn, dict):
+            continue
+        role = turn.get("role")
+        content = turn.get("content")
+        if role in {"assistant", "noa"}:
+            role = "noa"
+        elif role in {"user", "therapist"}:
+            role = "user"
+        else:
+            continue
+        if isinstance(content, str) and content.strip():
+            normalized.append((role, content.strip()))
+    return normalized
 
 
 def transcript_section(data):
@@ -252,6 +323,29 @@ def normalized_step_times(value):
     except (SyntaxError, ValueError):
         return str(value)
     return json.dumps(parsed, ensure_ascii=False)
+
+
+def parsed_step_durations(value):
+    if value in (None, ""):
+        return None
+    try:
+        parsed = ast.literal_eval(value) if isinstance(value, str) else value
+    except (SyntaxError, ValueError):
+        return None
+    if not isinstance(parsed, (list, tuple)):
+        return None
+    values = []
+    for item in parsed:
+        if not isinstance(item, str) or ":" not in item:
+            return None
+        minutes, seconds = item.split(":", maxsplit=1)
+        try:
+            values.append(int(minutes) * 60 + int(seconds))
+        except ValueError:
+            return None
+    if not values:
+        return []
+    return [values[0], *[current - previous for previous, current in zip(values, values[1:])]]
 
 
 def boolean_value(value):
