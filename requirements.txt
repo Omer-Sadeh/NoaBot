@@ -5,3 +5,7 @@ firebase-admin
 st-theme
 certifi
 pytest
+altair
+openpyxl
+numpy
+scipy

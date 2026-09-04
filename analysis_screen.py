@@ -20,12 +20,14 @@ from conversation_data import (
     clear_attempt_cache,
     filter_attempts,
     load_attempts,
-    render_filters,
+    render_date_range_filter,
     setup_firestore,
 )
+from survey_screen import clear_survey_cache, render_survey_outcomes
 
 
 MIN_COMPARISON_SAMPLE = 10
+ANALYSIS_STATUSES = ("success", "no success")
 
 
 def analysis_attempt_key(attempt: dict) -> str:
@@ -160,6 +162,16 @@ def render_section_distribution(
         ],
     ).facet(column=alt.Column("series:N", title=None), columns=3)
     st.altair_chart(chart, use_container_width=True)
+
+
+def analysis_filters(date_range) -> dict:
+    return {
+        "mode": "open",
+        "statuses": ANALYSIS_STATUSES,
+        "date_range": date_range,
+        "session_id": "",
+        "language": "All",
+    }
 
 
 def render_overview(attempts: list[dict], metrics_by_attempt: dict[str, dict]) -> None:
@@ -437,9 +449,13 @@ def render_analysis_screen() -> None:
     collection_name = config.get_variant(st.session_state.get("variant"))["collection"]
     if st.sidebar.button("Refresh saved attempts", key="analysis_refresh"):
         clear_attempt_cache()
+        clear_survey_cache()
         st.rerun()
     attempts = load_attempts(collection_name)
-    filters = render_filters(attempts, mode="open", key_prefix="analysis")
+    st.sidebar.header("Filters")
+    filters = analysis_filters(
+        render_date_range_filter(attempts, key_prefix="analysis")
+    )
     filtered = filter_attempts(attempts, filters)
     if not filtered:
         st.info("No open conversation attempts match the current filters.")
@@ -462,10 +478,10 @@ def render_analysis_screen() -> None:
         for attempt in filtered
     }
     analyzed_count = sum(result is not None for result in semantic_by_attempt.values())
-    st.caption(
+    st.sidebar.caption(
         f"Semantic analysis cached for {analyzed_count}/{len(filtered)} filtered attempts."
     )
-    if st.button("Analyze missing or changed sessions", type="primary"):
+    if st.sidebar.button("Analyze missing or changed sessions", type="primary"):
         try:
             with st.spinner("Creating cached reference metrics..."):
                 analyzed = analyze_missing(database, filtered, metrics_by_attempt)
@@ -474,8 +490,8 @@ def render_analysis_screen() -> None:
         except Exception as error:
             st.error(f"Semantic analysis could not complete: {error}")
 
-    overview_tab, timing_tab, alignment_tab = st.tabs(
-        ("Overview", "Time and length", "Alignment and complexity")
+    overview_tab, timing_tab, alignment_tab, survey_tab = st.tabs(
+        ("Overview", "Time and length", "Alignment and complexity", "Survey outcomes")
     )
     with overview_tab:
         render_overview(filtered, metrics_by_attempt)
@@ -485,6 +501,8 @@ def render_analysis_screen() -> None:
         render_alignment_and_complexity(
             filtered, metrics_by_attempt, semantic_by_attempt
         )
+    with survey_tab:
+        render_survey_outcomes(filtered, metrics_by_attempt, semantic_by_attempt)
 
     if st.button("Back to Menu", key="analysis_back"):
         st.session_state.pre_done = False

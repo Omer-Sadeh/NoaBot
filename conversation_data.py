@@ -131,6 +131,20 @@ def available_date_range(conversations: list[dict]) -> tuple | tuple[None, None]
     return (min(dates), max(dates)) if dates else (None, None)
 
 
+def render_date_range_filter(
+    conversations: list[dict], *, key_prefix: str = "conversations"
+):
+    minimum, maximum = available_date_range(conversations)
+    date_value = (
+        (minimum, maximum) if minimum is not None and maximum is not None else None
+    )
+    return st.sidebar.date_input(
+        "Date range",
+        value=date_value,
+        key=f"{key_prefix}_date",
+    )
+
+
 def render_filters(
     conversations: list[dict],
     *,
@@ -138,7 +152,6 @@ def render_filters(
     key_prefix: str = "conversations",
 ) -> dict:
     """Render filters that both admin screens use."""
-    minimum, maximum = available_date_range(conversations)
     st.sidebar.header("Filters")
     if mode is None:
         selected_mode = st.sidebar.selectbox(
@@ -149,9 +162,6 @@ def render_filters(
     else:
         selected_mode = mode
         st.sidebar.caption(f"Mode: {mode}")
-    date_value = (
-        (minimum, maximum) if minimum is not None and maximum is not None else None
-    )
     return {
         "mode": selected_mode,
         "statuses": st.sidebar.multiselect(
@@ -160,10 +170,8 @@ def render_filters(
             default=STATUS_OPTIONS,
             key=f"{key_prefix}_status",
         ),
-        "date_range": st.sidebar.date_input(
-            "Date range",
-            value=date_value,
-            key=f"{key_prefix}_date",
+        "date_range": render_date_range_filter(
+            conversations, key_prefix=key_prefix
         ),
         "session_id": st.sidebar.text_input(
             "Session ID contains",

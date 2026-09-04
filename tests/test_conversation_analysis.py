@@ -101,3 +101,16 @@ def test_semantic_metrics_excludes_fixed_initial_noa_prompt_from_generated_turns
     metrics = semantic_metrics(attempt, embeddings)
 
     assert metrics["reference_trajectory"]["noa"]["turn_count"] == 1
+
+
+def test_semantic_metrics_reports_domain_reference_coverage():
+    attempt = sample_attempt()
+    reference = language_reference("en")
+    from conversation_analysis import DOMAIN_ANCHORS, semantic_texts
+
+    texts = semantic_texts(attempt)
+    embeddings = {text: [1.0, 0.0] for text in texts}
+    metrics = semantic_metrics(attempt, embeddings)
+
+    assert set(metrics["domain_reference_coverage"]) == set(DOMAIN_ANCHORS["en"])
+    assert metrics["domain_reference_coverage"]["calm_deescalation"]["available"] is True

@@ -1,6 +1,7 @@
 """
 Centralized configuration for OpenAI models used across the application.
 """
+from pathlib import Path
 
 # --- Available OpenAI Models (Reference) ---
 # https://platform.openai.com/docs/models
@@ -42,6 +43,8 @@ ADVANCED_REASONING_MODEL = "gpt-5-mini"
 
 # Used for cached semantic reference metrics on the Analysis screen.
 EMBEDDING_MODEL = "text-embedding-3-large"
+
+SURVEY_WORKBOOK_PATH = Path(__file__).parent / "docs" / "Results_username_crossed_open.xlsx"
 
 # Used for:
 # 1. closed script: Audio transcription

@@ -12,7 +12,7 @@ from statistics import median
 from script_loader import load_closed_script
 
 
-ANALYZER_VERSION = "1"
+ANALYZER_VERSION = "2"
 MIN_STYLE_TURNS = 3
 WORD_PATTERN = re.compile(r"[\w\u0590-\u05ff]+", re.UNICODE)
 SENTENCE_PATTERN = re.compile(r"(?<=[.!?。؟])\s+")
@@ -33,6 +33,49 @@ FUNCTION_WORDS = {
 REFLECTION_MARKERS = {
     "en": ("it sounds", "i hear", "you feel", "that sounds", "i can see"),
     "he": ("נשמע", "אני שומע", "אני מבינה", "את מרגישה", "זה נשמע"),
+}
+
+DOMAIN_ANCHORS = {
+    "en": {
+        "calm_deescalation": (
+            "It sounds upsetting. Conflict is part of every relationship.",
+            "Reflect and validate Noa's initial emotional reaction.",
+        ),
+        "viewpoint_reflection": (
+            "Help Noa identify and make sense of the emotions involved in the conflict.",
+            "Explore Noa's typical coping pattern in conflicts.",
+        ),
+        "constructive_next_step": (
+            "What is your goal in talking to her?",
+            "Let's practice how you could say that to her.",
+            "Your suggestion sounds like a good compromise.",
+        ),
+        "guiding_questions": (
+            "How do you usually behave in situations like this?",
+            "What would you want to say? What is your goal?",
+            "How could you say that to her?",
+        ),
+    },
+    "he": {
+        "calm_deescalation": (
+            "באמת לא נעים, תזכרי שקונפליקט הוא חלק מכל קשר שיש לנו.",
+            "זיהוי הקונפליקט והתסכול הראשוני ומתן תוקף.",
+        ),
+        "viewpoint_reflection": (
+            "זיהוי ומסגור הרגשות המעורבים בקונפליקט.",
+            "זיהוי דפוסי ההתמודדות או ההתנהגות של נועה בקונפליקטים.",
+        ),
+        "constructive_next_step": (
+            "מה המטרה שלך בשיחה איתה?",
+            "בואי נתרגל, איך את יכולה להגיד לה את זה?",
+            "ההצעה שלך נשמעת כמו פשרה טובה.",
+        ),
+        "guiding_questions": (
+            "איך את בדרך כלל מתנהגת במצבים כאלה?",
+            "מה היית רוצה להגיד? מה המטרה שלך בשיחה איתה?",
+            "איך את יכולה להגיד לה את זה?",
+        ),
+    },
 }
 
 
@@ -269,6 +312,11 @@ def semantic_texts(attempt: dict) -> list[str]:
     for role in ("noa", "user"):
         texts.extend(generated_role_texts(attempt, role))
         texts.extend(reference[role])
+    texts.extend(
+        anchor
+        for anchors in DOMAIN_ANCHORS.get(language, DOMAIN_ANCHORS["en"]).values()
+        for anchor in anchors
+    )
     return list(dict.fromkeys(text for text in texts if text.strip()))
 
 
@@ -304,7 +352,27 @@ def semantic_metrics(attempt: dict, embeddings: dict[str, list[float]]) -> dict:
                 observed, reference_moves, embeddings
             ),
         }
-    return {"analysis_version": ANALYZER_VERSION, "reference_trajectory": roles}
+    domain_coverage = {}
+    for domain, anchors in DOMAIN_ANCHORS.get(language, DOMAIN_ANCHORS["en"]).items():
+        scores = []
+        for anchor in anchors:
+            similarities = [
+                cosine_similarity(embeddings[text], embeddings[anchor])
+                for text in generated_role_texts(attempt, "user")
+                if text in embeddings and anchor in embeddings
+            ]
+            if similarities:
+                scores.append(max(similarities))
+        domain_coverage[domain] = {
+            "coverage": round(sum(scores) / len(scores), 6) if scores else None,
+            "anchor_count": len(anchors),
+            "available": bool(scores),
+        }
+    return {
+        "analysis_version": ANALYZER_VERSION,
+        "reference_trajectory": roles,
+        "domain_reference_coverage": domain_coverage,
+    }
 
 
 def monotonic_alignment(
