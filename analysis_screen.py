@@ -502,7 +502,14 @@ def render_analysis_screen() -> None:
             filtered, metrics_by_attempt, semantic_by_attempt
         )
     with survey_tab:
-        render_survey_outcomes(filtered, metrics_by_attempt, semantic_by_attempt)
+        closed_filters = {**filters, "mode": "closed"}
+        closed_filtered = filter_attempts(attempts, closed_filters)
+        render_survey_outcomes(
+            filtered,
+            metrics_by_attempt,
+            semantic_by_attempt,
+            closed_filtered,
+        )
 
     if st.button("Back to Menu", key="analysis_back"):
         st.session_state.pre_done = False

@@ -67,6 +67,7 @@ SPEAKER_PATTERN = re.compile(
     r"^\s*(?:--\s*)?(Noa|User|Therapist|נועה|משתמש)\s*:\s?(.*)$",
     re.IGNORECASE | re.MULTILINE,
 )
+CLOSED_CORRECT_PATTERN = re.compile(r"^\s*Correct:\s*(Yes|No)\s*$", re.IGNORECASE)
 
 
 def normalize_conversation(conversation):
@@ -192,6 +193,9 @@ def normalize_conversation(conversation):
             "completed_guideline_events", []
         ),
         "instrument": conversation.get("instrument", {}),
+        "closed_stage_results": (
+            parse_closed_stage_results(data) if mode == "closed" else []
+        ),
     }
 
 
@@ -227,7 +231,7 @@ def parse_transcript(data):
             add_turn()
             current_role = normalize_speaker(match.group(1))
             current_lines = [match.group(2)]
-        elif line.strip().lower().startswith("correct:"):
+        elif CLOSED_CORRECT_PATTERN.match(line):
             add_turn()
             current_role = None
             current_lines = []
@@ -243,6 +247,76 @@ def parse_transcript(data):
             for role, content in turns
         )
     return transcript.strip(), turns
+
+
+def parse_closed_stage_results(data: str) -> list[dict]:
+    """Recover scored closed-script stages from transcript Correct: Yes/No lines."""
+    transcript = transcript_section(data)
+    results = []
+    pending_noa = None
+    pending_user = None
+    current_role = None
+    current_lines = []
+    stage = 0
+
+    def flush_speaker():
+        nonlocal current_role, current_lines, pending_noa, pending_user
+        if current_role is None:
+            return
+        content = "\n".join(current_lines).strip()
+        if content:
+            if current_role == "noa":
+                pending_noa = content
+                pending_user = None
+            else:
+                pending_user = content
+        current_role = None
+        current_lines = []
+
+    for line in transcript.splitlines():
+        speaker_match = SPEAKER_PATTERN.match(line)
+        correct_match = CLOSED_CORRECT_PATTERN.match(line)
+        if speaker_match:
+            flush_speaker()
+            current_role = normalize_speaker(speaker_match.group(1))
+            current_lines = [speaker_match.group(2)]
+            continue
+        if correct_match:
+            flush_speaker()
+            if pending_user is not None:
+                stage += 1
+                results.append(
+                    {
+                        "stage": stage,
+                        "noa_prompt": pending_noa,
+                        "selected_answer": pending_user,
+                        "is_correct": correct_match.group(1).lower() == "yes",
+                    }
+                )
+            pending_noa = None
+            pending_user = None
+            continue
+        if line.strip().startswith("---"):
+            continue
+        if current_role is not None:
+            current_lines.append(line)
+    return results
+
+
+def classify_closed_option(selected_answer: str | None, script_entry: dict) -> str:
+    """Match a chosen answer to correct / incorrect_1 / incorrect_2 when possible."""
+    if not selected_answer or not script_entry:
+        return "unknown"
+    normalized = selected_answer.strip()
+    mapping = (
+        ("correct", script_entry.get("correct_answer")),
+        ("incorrect_1", script_entry.get("incorrect_answer_1")),
+        ("incorrect_2", script_entry.get("incorrect_answer_2")),
+    )
+    for option_type, option_text in mapping:
+        if isinstance(option_text, str) and option_text.strip() == normalized:
+            return option_type
+    return "unknown"
 
 
 def normalized_structured_turns(turns):

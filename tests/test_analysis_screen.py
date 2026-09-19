@@ -17,8 +17,8 @@ def test_distribution_rows_keeps_metric_values_for_histogram_binning():
     ]
 
 
-def test_analysis_filters_include_all_languages_and_completed_open_outcomes():
-    attempts = [
+def sample_attempts():
+    return [
         {
             "session_id": "open-success",
             "mode": "open",
@@ -46,11 +46,31 @@ def test_analysis_filters_include_all_languages_and_completed_open_outcomes():
             "is_successful": True,
             "session_language": "en",
         },
+        {
+            "session_id": "closed-no-success",
+            "mode": "closed",
+            "status": "completed",
+            "is_successful": False,
+            "session_language": "he",
+        },
     ]
 
-    filtered = filter_attempts(attempts, analysis_filters(date_range=None))
+
+def test_analysis_filters_include_all_languages_and_completed_open_outcomes():
+    filtered = filter_attempts(sample_attempts(), analysis_filters(date_range=None))
 
     assert [attempt["session_id"] for attempt in filtered] == [
         "open-success",
         "open-no-success",
+    ]
+
+
+def test_closed_filter_keeps_completed_closed_attempts_for_survey_insights():
+    open_filters = analysis_filters(date_range=None)
+    closed_filters = {**open_filters, "mode": "closed"}
+    filtered = filter_attempts(sample_attempts(), closed_filters)
+
+    assert [attempt["session_id"] for attempt in filtered] == [
+        "closed-success",
+        "closed-no-success",
     ]

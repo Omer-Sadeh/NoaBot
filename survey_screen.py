@@ -9,13 +9,29 @@ import streamlit as st
 
 import config
 from survey_analysis import (
+    closed_cohort_summary,
+    closed_distractor_patterns,
+    closed_stage_difficulty,
+    concordance_quadrants,
+    ground_truth_pathway,
+    insight_diagnostics,
     joined_cases,
     observed_value,
+    open_stage_coverage,
     paired_summary,
     scale_reliability,
     spearman_summary,
+    triangulation_profiles,
 )
 from survey_data import DOMAIN_COLUMNS, SurveyDataError, load_survey_rows, workbook_hash
+
+
+QUADRANT_LABELS = {
+    "high_high": "High confidence · high proxy",
+    "high_low": "High confidence · low proxy",
+    "low_high": "Low confidence · high proxy",
+    "low_low": "Low confidence · low proxy",
+}
 
 
 @st.cache_data(ttl=300, show_spinner=False)
@@ -94,6 +110,14 @@ def _change_plot(rows: list[dict], title: str) -> alt.Chart:
     return (zero + dots).properties(title=title, height=130)
 
 
+def _layer_banner() -> None:
+    st.caption(
+        "Evidence layers: **authored ground truth** · **closed-cohort recognition** · "
+        "**open-session semantic proximity** · **matched self-report**. "
+        "Open and closed cohorts are independent; scales are not interchangeable."
+    )
+
+
 def _render_self_report(cases: list[dict]) -> None:
     st.subheader("Self-reported change")
     st.caption("Pre/post values are self-reported confidence (0–100). Changes occurred following the session; this design does not establish causality.")
@@ -150,16 +174,307 @@ def _render_experience(cases: list[dict]) -> None:
         st.write(f"{score} × {observed.replace('_', ' ')}: n={result['n']}, ρ={result['rho']}" + (f", 95% CI {result.get('ci_low')} to {result.get('ci_high')}" if result.get("ci_low") is not None else ""))
 
 
-def render_survey_outcomes(attempts: list[dict], deterministic: dict, semantic: dict) -> None:
+def _render_ground_truth() -> None:
+    st.subheader("Ground-truth pathway")
+    st.caption(
+        "When answered correctly, the closed script is the authored ground truth for how the "
+        "therapist should act and how Noa should respond. Survey domain `guiding_questions` is "
+        "cross-cutting and not a one-to-one stage mapping."
+    )
+    for stage in ground_truth_pathway():
+        domains = ", ".join(domain.replace("_", " ") for domain in stage["survey_domains"])
+        st.markdown(
+            f"**Stage {stage['stage']}** — therapist: {stage['therapist_label']}; "
+            f"Noa: {stage['noa_label']}; primary survey domain: "
+            f"`{stage['primary_domain'].replace('_', ' ')}` (also: {domains})."
+        )
+
+
+def _render_closed_cohort(closed_attempts: list[dict]) -> None:
+    st.subheader("Closed cohort recognition")
+    st.caption(
+        "Closed accuracy is multiple-choice recognition of the authored therapist move. "
+        "It is not open-session therapeutic skill."
+    )
+    summary = closed_cohort_summary(closed_attempts)
+    if not summary["n"]:
+        st.info("No completed closed-script attempts match the current filters.")
+        return
+    columns = st.columns(4)
+    columns[0].metric("Closed sessions", summary["n"])
+    columns[1].metric("Median accuracy", f"{summary['median_accuracy']:.0%}" if summary["median_accuracy"] is not None else "—")
+    columns[2].metric("Mean accuracy", f"{summary['mean_accuracy']:.0%}" if summary["mean_accuracy"] is not None else "—")
+    columns[3].metric("Perfect score rate", f"{summary['perfect_rate']:.0%}" if summary["perfect_rate"] is not None else "—")
+    if summary.get("accuracy_values"):
+        st.altair_chart(
+            alt.Chart(alt.Data(values=[{"accuracy": value} for value in summary["accuracy_values"]]))
+            .mark_bar()
+            .encode(
+                x=alt.X("accuracy:Q", bin=alt.Bin(maxbins=6), title="Closed accuracy"),
+                y=alt.Y("count():Q", title="Sessions"),
+            )
+            .properties(title="Closed-script accuracy distribution"),
+            use_container_width=True,
+        )
+    difficulty = closed_stage_difficulty(closed_attempts)
+    if difficulty:
+        st.markdown("**Stage difficulty**")
+        chart_rows = [
+            {
+                "stage": f"Stage {row['stage']}",
+                "correct_rate": row["correct_rate"],
+                "ci_low": row["ci_low"],
+                "ci_high": row["ci_high"],
+                "n": row["n"],
+                "label": row.get("therapist_label") or "",
+            }
+            for row in difficulty
+            if row.get("correct_rate") is not None
+        ]
+        if chart_rows:
+            base = alt.Chart(alt.Data(values=chart_rows))
+            points = base.mark_circle(size=90).encode(
+                x=alt.X("correct_rate:Q", title="P(correct)", scale=alt.Scale(domain=[0, 1])),
+                y=alt.Y("stage:N", title=None, sort=[row["stage"] for row in chart_rows]),
+                tooltip=["stage:N", "label:N", "n:Q", alt.Tooltip("correct_rate:Q", format=".0%")],
+            )
+            error = base.mark_rule().encode(
+                x="ci_low:Q",
+                x2="ci_high:Q",
+                y=alt.Y("stage:N", sort=[row["stage"] for row in chart_rows]),
+            )
+            st.altair_chart((error + points).properties(height=180), use_container_width=True)
+            for row in difficulty:
+                st.caption(
+                    f"Stage {row['stage']} ({row.get('therapist_label')}): "
+                    f"n={row['n']}, P(correct)={row['correct_rate']}"
+                    + (
+                        f", 95% CI {row['ci_low']}–{row['ci_high']}"
+                        if row.get("ci_low") is not None
+                        else ""
+                    )
+                )
+    patterns = closed_distractor_patterns(closed_attempts)
+    if patterns:
+        st.markdown("**Common distractor patterns among incorrect choices**")
+        for row in patterns[:8]:
+            st.write(
+                f"Stage {row['stage']}: {row['failure_mode_label']} — "
+                f"{row['count']}/{row['stage_error_n']} errors "
+                f"({row['share_of_stage_errors']:.0%})"
+            )
+    elif summary["with_stage_detail"] == 0:
+        st.info("Stage-level Correct: lines were not recoverable for these closed attempts.")
+
+
+def _render_open_vs_target(cases: list[dict]) -> None:
+    st.subheader("Open sessions versus authored target")
+    st.caption(
+        "Reference-move coverage is semantic proximity to closed-script correct answers. "
+        "It is exploratory proximity, not correctness or competence."
+    )
+    coverage = open_stage_coverage(cases)
+    if not coverage["stages"]:
+        st.info("No cached semantic reference coverage is available for matched open sessions.")
+        return
+    st.caption(
+        f"Sessions with coverage: {coverage['n_with_coverage']}/{coverage['n_sessions']}."
+    )
+    chart_rows = [
+        {
+            "stage": f"Stage {row['stage']}",
+            "median_coverage": row["median_coverage"],
+            "label": row.get("therapist_label") or "",
+            "n": row["n"],
+        }
+        for row in coverage["stages"]
+    ]
+    st.altair_chart(
+        alt.Chart(alt.Data(values=chart_rows))
+        .mark_bar()
+        .encode(
+            x=alt.X("median_coverage:Q", title="Median reference coverage", scale=alt.Scale(domain=[0, 1])),
+            y=alt.Y("stage:N", title=None, sort=[row["stage"] for row in chart_rows]),
+            tooltip=["stage:N", "label:N", "n:Q", alt.Tooltip("median_coverage:Q", format=".2f")],
+        )
+        .properties(title="Open proximity to authored therapist moves", height=180),
+        use_container_width=True,
+    )
+    if coverage["sequence_pairs"]:
+        st.markdown("**Coverage versus sequence fidelity**")
+        st.caption(
+            "Sequence fidelity is exploratory monotonic alignment to the closed-script order. "
+            "High coverage with low fidelity may mean content-like language in a disordered process."
+        )
+        _chart(
+            coverage["sequence_pairs"],
+            "coverage",
+            "sequence_fidelity",
+            "Mean coverage and sequence fidelity",
+        )
+
+
+def _render_survey_calibration(cases: list[dict]) -> None:
+    st.subheader("Survey calibration against open proxies")
+    st.caption(
+        "Quadrants are median-split concordance between self-reported confidence and an open "
+        "semantic proxy. They are not over/underconfidence relative to competence."
+    )
+    for domain in DOMAIN_COLUMNS:
+        result = concordance_quadrants(cases, domain)
+        st.markdown(
+            f"**{domain.replace('_', ' ').title()}** — n={result['n']}; "
+            f"post median={result['post_median']}; proxy median={result['proxy_median']}"
+        )
+        if result["n"] < 2:
+            st.info("Not enough matched values for concordance quadrants.")
+            continue
+        post_rho = result["post_vs_proxy"]
+        change_rho = result["change_vs_proxy"]
+        st.write(
+            f"Post × proxy: ρ={post_rho.get('rho')} (n={post_rho.get('n')}); "
+            f"change × proxy: ρ={change_rho.get('rho')} (n={change_rho.get('n')})"
+        )
+        quad_rows = [
+            {
+                "quadrant": QUADRANT_LABELS[key],
+                "count": values["count"],
+                "proportion": values["proportion"],
+            }
+            for key, values in result["quadrants"].items()
+        ]
+        st.altair_chart(
+            alt.Chart(alt.Data(values=quad_rows))
+            .mark_bar()
+            .encode(
+                x=alt.X("count:Q", title="Sessions"),
+                y=alt.Y("quadrant:N", title=None, sort=list(QUADRANT_LABELS.values())),
+                tooltip=["quadrant:N", "count:Q", alt.Tooltip("proportion:Q", format=".0%")],
+            )
+            .properties(height=140),
+            use_container_width=True,
+        )
+        for key, values in result["quadrants"].items():
+            st.caption(
+                f"{QUADRANT_LABELS[key]}: {values['count']} "
+                f"({values['proportion']:.0%}; 95% CI {values['ci_low']:.0%}–{values['ci_high']:.0%})"
+            )
+
+
+def _render_triangulation(cases: list[dict], closed_attempts: list[dict]) -> None:
+    st.subheader("Cross-source triangulation")
+    st.warning(
+        "These panels align constructs by stage/domain mapping only. "
+        "Closed and open/survey cohorts are independent samples with different scales. "
+        "Do not read this as person-level transfer."
+    )
+    closed_difficulty = closed_stage_difficulty(closed_attempts)
+    coverage = open_stage_coverage(cases)
+    profiles = triangulation_profiles(closed_difficulty, coverage, cases)
+    if not any(row["closed_n"] or row["open_n"] or row["survey_n"] for row in profiles):
+        st.info("Not enough closed, open, or survey data to triangulate.")
+        return
+    for row in profiles:
+        st.markdown(f"**Stage {row['stage']} · {row['therapist_label']}**")
+        st.caption(f"Intended Noa response: {row['noa_label']}")
+        columns = st.columns(3)
+        closed_text = (
+            f"{row['closed_correct_rate']:.0%} (n={row['closed_n']})"
+            if row["closed_correct_rate"] is not None
+            else f"unavailable (n={row['closed_n']})"
+        )
+        open_text = (
+            f"{row['open_median_coverage']:.2f} (n={row['open_n']})"
+            if row["open_median_coverage"] is not None
+            else f"unavailable (n={row['open_n']})"
+        )
+        survey_text = (
+            f"{row['survey_change_median']:+.1f} (n={row['survey_n']})"
+            if row["survey_change_median"] is not None
+            else f"unavailable (n={row['survey_n']})"
+        )
+        columns[0].metric("Closed P(correct)", closed_text)
+        columns[1].metric("Open median coverage", open_text)
+        columns[2].metric(
+            f"Survey Δ {row['primary_domain'].replace('_', ' ')}",
+            survey_text,
+        )
+
+
+def _render_script_insights(cases: list[dict], closed_attempts: list[dict], diagnostics: dict) -> None:
+    _layer_banner()
+    st.caption(
+        f"Samples — survey matched: {diagnostics['survey_matched']}; "
+        f"closed: {diagnostics['closed_n']}; "
+        f"open semantic: {diagnostics['open_semantic_n']}/{diagnostics['open_case_n']}."
+    )
+    pathway_tab, closed_tab, open_tab, calibration_tab, triangle_tab = st.tabs(
+        (
+            "Ground-truth pathway",
+            "Closed cohort",
+            "Open vs target",
+            "Survey calibration",
+            "Triangulation",
+        )
+    )
+    with pathway_tab:
+        _render_ground_truth()
+    with closed_tab:
+        _render_closed_cohort(closed_attempts)
+    with open_tab:
+        _render_open_vs_target(cases)
+    with calibration_tab:
+        _render_survey_calibration(cases)
+    with triangle_tab:
+        _render_triangulation(cases, closed_attempts)
+
+
+def _render_methods(diagnostics: dict) -> None:
+    st.markdown(
+        "Scores use complete cases only. UES usability items are reverse-scored; UEQ-S values "
+        "are converted from 1–7 to −3–3. Correlations are Spearman rank associations with "
+        "deterministic bootstrap intervals when n≥10. "
+        "Closed stage difficulty uses bootstrap proportion intervals. "
+        "No result establishes causality or objective therapeutic competence."
+    )
+    st.markdown(
+        f"- Survey matched to open attempts: **{diagnostics['survey_matched']}** "
+        f"(unmatched surveys: {diagnostics['survey_unmatched']}; "
+        f"multi-attempt open sessions: {diagnostics['multi_attempt_sessions']}).\n"
+        f"- Closed completed sessions: **{diagnostics['closed_n']}** "
+        f"(with recoverable stage detail: {diagnostics['closed_with_stage_detail']}).\n"
+        f"- Open sessions with semantic coverage: **{diagnostics['open_semantic_n']}** / "
+        f"{diagnostics['open_case_n']}.\n"
+        f"- Closed languages: {diagnostics['closed_languages'] or 'none'}; "
+        f"open languages: {diagnostics['open_languages'] or 'none'}."
+    )
+    st.markdown(
+        "**Limitations:** closed multiple-choice recognition ≠ open therapeutic skill; "
+        "embedding proximity and LLM guideline completion are not ground truth; "
+        "survey change is not causal evidence; open and closed cohorts are not person-linked."
+    )
+
+
+def render_survey_outcomes(
+    attempts: list[dict],
+    deterministic: dict,
+    semantic: dict,
+    closed_attempts: list[dict] | None = None,
+) -> None:
     """Render safely: workbook problems must not affect the existing analysis tabs."""
     try:
         surveys, _ = load_configured_surveys()
     except SurveyDataError as error:
         st.error(f"Survey outcomes unavailable: {error}")
         return
-    cases, _ = joined_cases(surveys, attempts, deterministic, semantic)
+    cases, join_info = joined_cases(surveys, attempts, deterministic, semantic)
+    closed_attempts = closed_attempts or []
+    closed_summary = closed_cohort_summary(closed_attempts)
+    coverage = open_stage_coverage(cases)
+    diagnostics = insight_diagnostics(join_info, closed_summary, coverage, cases)
+
     change_tab, concordance_tab, experience_tab, script_tab, methods_tab = st.tabs(
-        ("Self-reported change", "Self-report vs session", "Experience vs behavior", "Script vs learning", "Methods")
+        ("Self-reported change", "Self-report vs session", "Experience vs behavior", "Script insights", "Methods")
     )
     with change_tab:
         _render_self_report(cases)
@@ -168,9 +483,6 @@ def render_survey_outcomes(attempts: list[dict], deterministic: dict, semantic: 
     with experience_tab:
         _render_experience(cases)
     with script_tab:
-        st.caption("Reference-move coverage measures similarity to the closed-script examples. It is exploratory and not a quality score.")
-        for domain in DOMAIN_COLUMNS:
-            result = spearman_summary(cases, lambda case: observed_value(case, "reference_coverage"), lambda case, d=domain: case["domains"][d]["change"])
-            st.write(f"Reference coverage × {domain.replace('_', ' ')} change: n={result['n']}, ρ={result['rho']}")
+        _render_script_insights(cases, closed_attempts, diagnostics)
     with methods_tab:
-        st.markdown("Scores use complete cases only. UES usability items are reverse-scored; UEQ-S values are converted from 1–7 to −3–3. Correlations are Spearman rank associations with deterministic bootstrap intervals when n≥10. No result establishes causality or objective therapeutic competence.")
+        _render_methods(diagnostics)
