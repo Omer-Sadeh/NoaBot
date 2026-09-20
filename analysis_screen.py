@@ -9,6 +9,7 @@ import streamlit as st
 from openai import OpenAI
 
 import config
+from analysis_export import build_analysis_export
 from conversation_analysis import (
     ANALYZER_VERSION,
     cache_key,
@@ -23,11 +24,38 @@ from conversation_data import (
     render_date_range_filter,
     setup_firestore,
 )
-from survey_screen import clear_survey_cache, render_survey_outcomes
+from script_analysis_explanations import render_measure_explanation
+from survey_data import SurveyDataError
+from survey_screen import (
+    clear_survey_cache,
+    load_configured_surveys,
+    render_survey_outcomes,
+)
 
 
 MIN_COMPARISON_SAMPLE = 10
 ANALYSIS_STATUSES = ("success", "no success")
+
+
+@st.cache_data(ttl=300, show_spinner=False)
+def cached_analysis_export(
+    attempts: list[dict],
+    metrics_by_attempt: dict[str, dict],
+    semantic_by_attempt: dict[str, dict | None],
+    closed_attempts: list[dict],
+    survey_rows: list[dict],
+    filters: dict,
+) -> bytes:
+    return build_analysis_export(
+        attempts=attempts,
+        metrics_by_attempt=metrics_by_attempt,
+        semantic_by_attempt=semantic_by_attempt,
+        closed_attempts=closed_attempts,
+        survey_rows=survey_rows,
+        filters=filters,
+        analyzer_version=ANALYZER_VERSION,
+        embedding_model=config.EMBEDDING_MODEL,
+    )
 
 
 def analysis_attempt_key(attempt: dict) -> str:
@@ -191,10 +219,7 @@ def render_overview(attempts: list[dict], metrics_by_attempt: dict[str, dict]) -
     columns[1].metric("Session IDs", session_count)
     columns[2].metric("Completed attempts", completed_count)
     columns[3].metric("LLM-judged guidelines cleared", cleared_count)
-    st.caption(
-        "An attempt is one saved conversation document. A session ID can contain "
-        "multiple attempts. Guideline completion is an LLM judgment, not ground truth."
-    )
+    render_measure_explanation("sample_overview")
     if len(attempts) < MIN_COMPARISON_SAMPLE:
         st.info(
             f"This filtered sample has fewer than {MIN_COMPARISON_SAMPLE} attempts. "
@@ -225,10 +250,7 @@ def render_time_and_length(
 ) -> None:
     st.subheader("Time and length")
     st.markdown("Conversation duration")
-    st.caption(
-        "Distribution of elapsed conversation time. It begins with the first trainee "
-        "turn and includes user idle time and system latency."
-    )
+    render_measure_explanation("conversation_duration")
     render_distribution_chart(
         [
             (
@@ -251,9 +273,7 @@ def render_time_and_length(
     )
 
     st.markdown("Trainee turns")
-    st.caption(
-        "Distribution of trainee messages per attempt. This is independent of system latency."
-    )
+    render_measure_explanation("trainee_turns")
     render_distribution_chart(
         [
             (
@@ -280,10 +300,7 @@ def render_time_and_length(
                     (attempt, f"Goal section {section}", seconds)
                 )
     st.markdown("Goal-section timing")
-    st.caption(
-        "Distribution of elapsed time before advancing through each goal section. "
-        "The y-axis is seconds; legacy attempts derive section values from saved offsets."
-    )
+    render_measure_explanation("section_timing")
     render_section_distribution(
         section_time_points, "Time before advancing", "seconds"
     )
@@ -298,8 +315,9 @@ def render_alignment_and_complexity(
     st.caption(
         "How to read these charts: the horizontal axis groups similar values into "
         "ranges, and the vertical axis is the number of sessions in each range. "
-        "They describe the sample, not an individual trainee. English and Hebrew "
-        "are kept separate because their wording and word counts differ."
+        "They describe the filtered sample, not an individual trainee. Language is "
+        "retained in the research export, but these charts pool languages when the "
+        "filter includes more than one language."
     )
 
     coverage_points = []
@@ -322,14 +340,7 @@ def render_alignment_and_complexity(
                     )
                 )
     st.markdown("Reference-move coverage")
-    st.caption(
-        "This asks: how similar was the conversation to the matching speaker's "
-        "line in the closed reference script? A trainee response is compared with "
-        "the reference therapist response; Noa's response is compared with the "
-        "reference Noa response. Scores run from 0 (less similar) to 1 (more "
-        "similar). A higher score means closer wording or meaning to the example, "
-        "not that the response was correct or better therapy."
-    )
+    render_measure_explanation("reference_coverage")
     if coverage_points:
         render_distribution_chart(
             coverage_points, "Reference-move coverage", "0–1"
@@ -356,13 +367,8 @@ def render_alignment_and_complexity(
             )
         )
     st.markdown("Therapeutic-register fidelity")
-    st.caption(
-        "This describes the surface style of trainee messages, using features that "
-        "are easy to count. Question rate is the number of question marks per "
-        "trainee message. Reflection-marker rate counts phrases such as “it sounds” "
-        "or their Hebrew equivalents per 100 words. These measures show how people "
-        "phrase their responses, not whether they are good therapists."
-    )
+    render_measure_explanation("question_rate")
+    render_measure_explanation("reflection_marker_rate")
     render_distribution_chart(
         question_rate_points,
         "Question rate",
@@ -388,13 +394,9 @@ def render_alignment_and_complexity(
             (attempt, "Words per sentence", complexity["median_words_per_sentence"])
         )
     st.markdown("Conversation complexity")
-    st.caption(
-        "This is a text-shape profile, not a difficulty or quality score. Lexical "
-        "diversity asks how varied the trainee's vocabulary is, while repeated-token "
-        "share asks how often words are reused. Both range from 0 to 1. Sentence "
-        "length is the typical number of words in a sentence. Lexical diversity is "
-        "hidden for sessions with fewer than 50 words because it would be unreliable."
-    )
+    render_measure_explanation("lexical_diversity")
+    render_measure_explanation("repetition_rate")
+    render_measure_explanation("sentence_length")
     render_distribution_chart(
         lexical_points, "Lexical signal", "proportion (0–1)"
     )
@@ -430,15 +432,7 @@ def render_alignment_and_complexity(
                 ]
             )
     st.markdown("Exploratory user-to-Noa style alignment")
-    st.caption(
-        "This exploratory measure checks whether a trainee's writing style becomes "
-        "more similar to Noa's immediately previous message. It uses small style "
-        "signals such as common connector words and message rhythm, not the topic "
-        "being discussed. Scores run from 0 to 1, but higher is not better: matching "
-        "a simulated patient's style is not a goal. The shuffled baseline is a "
-        "comparison made from unrelated turns in the same session; if it looks "
-        "similar to the main result, the apparent alignment may be coincidence."
-    )
+    render_measure_explanation("style_alignment")
     render_distribution_chart(
         alignment_points, "Style alignment", "0–1"
     )
@@ -490,6 +484,33 @@ def render_analysis_screen() -> None:
         except Exception as error:
             st.error(f"Semantic analysis could not complete: {error}")
 
+    closed_filters = {**filters, "mode": "closed"}
+    closed_filtered = filter_attempts(attempts, closed_filters)
+    try:
+        survey_rows, _ = load_configured_surveys()
+    except SurveyDataError:
+        survey_rows = []
+
+    st.warning(
+        "The research export contains internal session identifiers and raw conversation "
+        "text. Treat the downloaded ZIP as identifiable, sensitive research data."
+    )
+    export_bytes = cached_analysis_export(
+        filtered,
+        metrics_by_attempt,
+        semantic_by_attempt,
+        closed_filtered,
+        survey_rows,
+        filters,
+    )
+    st.download_button(
+        "Download research CSV bundle",
+        data=export_bytes,
+        file_name=f"noabot_analysis_{datetime.now(timezone.utc):%Y%m%d}.zip",
+        mime="application/zip",
+        help="Exports the current filtered sample. It uses cached semantic results only.",
+    )
+
     overview_tab, timing_tab, alignment_tab, survey_tab = st.tabs(
         ("Overview", "Time and length", "Alignment and complexity", "Survey outcomes")
     )
@@ -502,8 +523,6 @@ def render_analysis_screen() -> None:
             filtered, metrics_by_attempt, semantic_by_attempt
         )
     with survey_tab:
-        closed_filters = {**filters, "mode": "closed"}
-        closed_filtered = filter_attempts(attempts, closed_filters)
         render_survey_outcomes(
             filtered,
             metrics_by_attempt,

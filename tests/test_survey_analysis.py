@@ -8,9 +8,11 @@ from survey_analysis import (
     domain_scores,
     ground_truth_pathway,
     insight_diagnostics,
+    observed_value,
     open_stage_coverage,
     score_instruments,
     select_attempts,
+    spearman_summary,
     triangulation_profiles,
 )
 
@@ -67,6 +69,30 @@ def test_cronbach_alpha_returns_none_for_degenerate_scale():
     rows = [{"one": 3, "two": 3}, {"one": 3, "two": 3}, {"one": 3, "two": 3}]
 
     assert cronbach_alpha(rows, ("one", "two")) is None
+
+
+def test_observed_value_preserves_missing_duration_and_completion():
+    case = {
+        "metrics": {
+            "length": {"duration_seconds": None},
+            "completion": {"guidelines_cleared": None, "guidelines_total": 5},
+        },
+        "semantic": None,
+        "attempt": {},
+    }
+
+    assert observed_value(case, "duration_minutes") is None
+    assert observed_value(case, "guideline_completion") is None
+
+
+def test_spearman_summary_reports_constant_input_as_unavailable():
+    cases = [{"x": 1, "y": value} for value in (1, 2, 3)]
+
+    result = spearman_summary(
+        cases, lambda case: case["x"], lambda case: case["y"]
+    )
+
+    assert result == {"n": 3, "rho": None, "p_value": None}
 
 
 def test_ground_truth_pathway_covers_five_stages():

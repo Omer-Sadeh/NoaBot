@@ -188,8 +188,11 @@ def observed_value(case: dict, key: str) -> float | None:
     metrics, semantic = case["metrics"], case["semantic"] or {}
     if key.startswith("domain:"):
         return semantic.get("domain_reference_coverage", {}).get(key.split(":", 1)[1], {}).get("coverage")
+    duration_seconds = metrics.get("length", {}).get("duration_seconds")
     values = {
-        "duration_minutes": (metrics.get("length", {}).get("duration_seconds") or 0) / 60,
+        "duration_minutes": duration_seconds / 60
+        if duration_seconds is not None
+        else None,
         "trainee_turns": metrics.get("length", {}).get("user", {}).get("turn_count"),
         "tips_shown": case["attempt"].get("tips_shown"),
         "guideline_completion": _completion(metrics),
@@ -203,7 +206,7 @@ def observed_value(case: dict, key: str) -> float | None:
 
 def _completion(metrics: dict) -> float | None:
     completion = metrics.get("completion", {})
-    if not completion.get("guidelines_total"):
+    if completion.get("guidelines_cleared") is None or not completion.get("guidelines_total"):
         return None
     return completion["guidelines_cleared"] / completion["guidelines_total"]
 
@@ -239,7 +242,11 @@ def spearman_summary(cases: list[dict], left, right) -> dict:
     if len(pairs) < 3:
         return {"n": len(pairs), "rho": None}
     x, y = map(np.array, zip(*pairs))
+    if np.unique(x).size < 2 or np.unique(y).size < 2:
+        return {"n": len(pairs), "rho": None, "p_value": None}
     rho = stats.spearmanr(x, y).statistic
+    if np.isnan(rho):
+        return {"n": len(pairs), "rho": None, "p_value": None}
     if len(pairs) < 10:
         return {"n": len(pairs), "rho": round(float(rho), 3), "p_value": None}
     rng = np.random.default_rng(BOOTSTRAP_SEED)

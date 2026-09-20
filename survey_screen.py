@@ -8,6 +8,7 @@ import altair as alt
 import streamlit as st
 
 import config
+from script_analysis_explanations import render_measure_explanation
 from survey_analysis import (
     closed_cohort_summary,
     closed_distractor_patterns,
@@ -46,6 +47,8 @@ def clear_survey_cache() -> None:
 
 def load_configured_surveys() -> tuple[list[dict], dict]:
     path = Path(config.SURVEY_WORKBOOK_PATH)
+    if not path.exists():
+        raise SurveyDataError(f"Survey workbook is missing: {path}")
     return _cached_rows(str(path), workbook_hash(path))
 
 
@@ -120,7 +123,7 @@ def _layer_banner() -> None:
 
 def _render_self_report(cases: list[dict]) -> None:
     st.subheader("Self-reported change")
-    st.caption("Pre/post values are self-reported confidence (0–100). Changes occurred following the session; this design does not establish causality.")
+    render_measure_explanation("self_report_change")
     for domain in DOMAIN_COLUMNS:
         rows = _paired_rows(cases, domain)
         summary = paired_summary(cases, domain)
@@ -136,7 +139,8 @@ def _render_self_report(cases: list[dict]) -> None:
 
 def _render_domain_comparisons(cases: list[dict]) -> None:
     st.subheader("Self-report versus observed session measures")
-    st.caption("Observed domain-reference coverage is semantic similarity to language-specific rubric anchors, not a direct measure of therapeutic competence.")
+    render_measure_explanation("domain_reference_coverage")
+    render_measure_explanation("spearman_association")
     for domain in DOMAIN_COLUMNS:
         rows = []
         for case in cases:
@@ -155,11 +159,12 @@ def _render_domain_comparisons(cases: list[dict]) -> None:
 
 def _render_experience(cases: list[dict]) -> None:
     st.subheader("Experience versus observed behavior")
-    st.caption("UES Perceived Usability is reverse scored. No total UES-SF score is shown because Aesthetic Appeal items are unavailable.")
+    render_measure_explanation("experience_scales")
     for score in ("Focused attention", "Perceived usability", "Reward", "Pragmatic quality", "Hedonic quality", "Overall UX", "Anthropomorphism", "Likeability", "Reuse intention"):
         st.markdown(f"**{score}**")
         _distribution(cases, score)
     reliability = scale_reliability(cases)
+    render_measure_explanation("scale_reliability")
     st.caption("Internal consistency (Cronbach’s α; complete cases only; exploratory at this sample size): " + ", ".join(
         f"{name}={value if value is not None else 'unavailable'}" for name, value in reliability.items()
     ))
@@ -169,6 +174,7 @@ def _render_experience(cases: list[dict]) -> None:
         ("Reuse intention", "guideline_completion"), ("Anthropomorphism", "style_alignment"),
     )
     st.markdown("**Curated associations**")
+    render_measure_explanation("spearman_association")
     for score, observed in definitions:
         result = spearman_summary(cases, lambda case, s=score: case["instruments"].get(s), lambda case, o=observed: observed_value(case, o))
         st.write(f"{score} × {observed.replace('_', ' ')}: n={result['n']}, ρ={result['rho']}" + (f", 95% CI {result.get('ci_low')} to {result.get('ci_high')}" if result.get("ci_low") is not None else ""))
@@ -192,10 +198,7 @@ def _render_ground_truth() -> None:
 
 def _render_closed_cohort(closed_attempts: list[dict]) -> None:
     st.subheader("Closed cohort recognition")
-    st.caption(
-        "Closed accuracy is multiple-choice recognition of the authored therapist move. "
-        "It is not open-session therapeutic skill."
-    )
+    render_measure_explanation("closed_accuracy")
     summary = closed_cohort_summary(closed_attempts)
     if not summary["n"]:
         st.info("No completed closed-script attempts match the current filters.")
@@ -219,6 +222,7 @@ def _render_closed_cohort(closed_attempts: list[dict]) -> None:
     difficulty = closed_stage_difficulty(closed_attempts)
     if difficulty:
         st.markdown("**Stage difficulty**")
+        render_measure_explanation("closed_stage_difficulty")
         chart_rows = [
             {
                 "stage": f"Stage {row['stage']}",
@@ -257,6 +261,7 @@ def _render_closed_cohort(closed_attempts: list[dict]) -> None:
     patterns = closed_distractor_patterns(closed_attempts)
     if patterns:
         st.markdown("**Common distractor patterns among incorrect choices**")
+        render_measure_explanation("closed_distractor_pattern")
         for row in patterns[:8]:
             st.write(
                 f"Stage {row['stage']}: {row['failure_mode_label']} — "
@@ -269,10 +274,7 @@ def _render_closed_cohort(closed_attempts: list[dict]) -> None:
 
 def _render_open_vs_target(cases: list[dict]) -> None:
     st.subheader("Open sessions versus authored target")
-    st.caption(
-        "Reference-move coverage is semantic proximity to closed-script correct answers. "
-        "It is exploratory proximity, not correctness or competence."
-    )
+    render_measure_explanation("reference_coverage")
     coverage = open_stage_coverage(cases)
     if not coverage["stages"]:
         st.info("No cached semantic reference coverage is available for matched open sessions.")
@@ -302,10 +304,7 @@ def _render_open_vs_target(cases: list[dict]) -> None:
     )
     if coverage["sequence_pairs"]:
         st.markdown("**Coverage versus sequence fidelity**")
-        st.caption(
-            "Sequence fidelity is exploratory monotonic alignment to the closed-script order. "
-            "High coverage with low fidelity may mean content-like language in a disordered process."
-        )
+        render_measure_explanation("sequence_fidelity")
         _chart(
             coverage["sequence_pairs"],
             "coverage",
@@ -316,10 +315,7 @@ def _render_open_vs_target(cases: list[dict]) -> None:
 
 def _render_survey_calibration(cases: list[dict]) -> None:
     st.subheader("Survey calibration against open proxies")
-    st.caption(
-        "Quadrants are median-split concordance between self-reported confidence and an open "
-        "semantic proxy. They are not over/underconfidence relative to competence."
-    )
+    render_measure_explanation("calibration_quadrants")
     for domain in DOMAIN_COLUMNS:
         result = concordance_quadrants(cases, domain)
         st.markdown(
@@ -363,6 +359,7 @@ def _render_survey_calibration(cases: list[dict]) -> None:
 
 def _render_triangulation(cases: list[dict], closed_attempts: list[dict]) -> None:
     st.subheader("Cross-source triangulation")
+    render_measure_explanation("triangulation")
     st.warning(
         "These panels align constructs by stage/domain mapping only. "
         "Closed and open/survey cohorts are independent samples with different scales. "
